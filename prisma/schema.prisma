@@ -1,0 +1,45 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// /// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
+// // model otps {
+// // }
+
+// /// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
+// // model users {
+// // }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  fullName    String
+  email       String   @unique
+  phoneNumber String?
+  password    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  otps        OTP[]
+}
+
+model OTP {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  otp       String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
+}
