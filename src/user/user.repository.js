@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-
 const prisma = new PrismaClient();
 
 const userRepository = {
@@ -14,26 +13,20 @@ const userRepository = {
   },
 
   async saveOtp(userId, otp, expiresAt) {
-    return await prisma.otp.create({
-      data: {
-        userId,
-        otp,
-        expiresAt,
-      },
+    return await prisma.oTP.create({
+      data: { userId, otp, expiresAt },
     });
   },
 
-  async findOtp(userId, otp) {
-    return await prisma.otp.findFirst({
-      where: {
-        userId,
-        otp,
-      },
+  async findLatestOtp(userId) {
+    return await prisma.oTP.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
     });
   },
 
   async deleteOtp(otpId) {
-    return await prisma.otp.delete({ where: { id: otpId } });
+    return await prisma.oTP.delete({ where: { id: otpId } });
   },
 };
 

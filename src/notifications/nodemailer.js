@@ -4,7 +4,7 @@ export const sendOtp = async (email, otp) => {
   try {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: 465,
+      port: process.env.SMTP_PORT || 465,
       secure: true,
       auth: {
         user: process.env.SMTP_USER,
@@ -13,15 +13,16 @@ export const sendOtp = async (email, otp) => {
     });
 
     const mailOptions = {
-      from: process.env.SMTP_USER,
+      from: `"NoReply" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: "Your OTP",
-      text: `Your OTP is: ${otp}. It expires in 45 seconds.`,
+      subject: "Your OTP Code",
+      text: `Your OTP is: ${otp}. It expires in 5 minutes.`,
     };
 
     await transporter.sendMail(mailOptions);
+    console.log("✅ OTP sent to:", email);
   } catch (error) {
-    console.error("Error sending OTP email:", error);
-    throw new Error("Failed to send OTP email");
+    console.error("❌ Failed to send OTP:", error.message);
+    throw new Error("OTP sending failed");
   }
 };
