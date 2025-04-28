@@ -16,11 +16,12 @@ const userController = {
         req.body.email,
         req.body.password
       );
-      res.json(result); // Includes OTP for frontend display
+      res.json(result);
     } catch (error) {
       res.status(401).json({ message: error.message });
     }
   },
+
   async generateOtp(req, res) {
     try {
       const { email } = req.body;
@@ -33,13 +34,71 @@ const userController = {
       res.status(400).json({ message: error.message });
     }
   },
+
   async verifyOtp(req, res) {
     try {
       const result = await userService.verifyUserOtp(
         req.body.email,
         req.body.otp
       );
-      res.json(result);
+      res.json({ ...result, userId: result.userId });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  },
+  async getUsers(req, res) {
+    try {
+      console.log("Fetching users for role...", req.cookies.userRole);
+      const users = await userService.getAllUsers(req.query.role);
+      console.log("Fouund users:", users);
+      if (!users || users.length === 0) {
+        return res.status(200).json([]);
+      }
+      res.json(users);
+    } catch (error) {
+      console.error("Error in getUsers:", error);
+      res.status(400).json({ message: error.message });
+    }
+  },
+  async getAdminId(req, res) {
+    try {
+      const admin = await prisma.user.findFirst({
+        where: { role: "ADMIN" },
+        select: { id: true },
+      });
+      res.json({ adminId: admin?.id });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  },
+
+  async createConversation(req, res) {
+    try {
+      const conversation = await userService.createConversation(
+        req.body.userId
+      );
+      res.json(conversation);
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  },
+
+  async getConversations(req, res) {
+    try {
+      const userId = req.query.userId;
+      const role = req.cookies.userRole;
+      const conversations = await userService.getConversations(userId, role);
+      res.json(conversations);
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  },
+
+  async getMessages(req, res) {
+    try {
+      const { conversationId } = req.query;
+      const messages = await userService.getMessages(conversationId);
+      res.json(messages);
     } catch (error) {
       res.status(400).json({ message: error.message });
     }
