@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import { generateOtp } from "../utils/generateOtp.js";
-import { sendOtp } from "../notifications/nodemailer.js";
+import { sendOtp } from "../utils/nodemailer.js";
 import userRepository from "./user.repository.js";
 import { Prisma } from "@prisma/client";
 
@@ -32,9 +32,9 @@ const userService = {
 
     await userRepository.saveOtp(user.id, otp, expiresAt);
     await sendOtp(email, otp);
-    console.log("DEV OTP:,");
+    console.log("DEV OTP ${email}: ${otp}");
     return { message: "proceed to OTP entry" };
-    // return { message: "OTP sent to email", userId: user.id };
+    //eturn { message: "OTP sent to email", userId: user.id };
   },
 
   async generateUserOtp(email) {
@@ -95,6 +95,7 @@ const userService = {
       return await userRepository.getChatByUserId(userId);
     }
   },
+
   async getMessages(conversationId) {
     return await Prisma.message.findMany({
       where: { conversationId },

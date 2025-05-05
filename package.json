@@ -22,6 +22,7 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -39,7 +40,7 @@
   "devDependencies": {
     "esbuild": "^0.23.0",
     "esbuild-register": "^3.6.0",
-    "prisma": "^5.17.0"
+    "prisma": "^5.22.0"
   },
   "engines": {
     "node": ">=20.17.0"

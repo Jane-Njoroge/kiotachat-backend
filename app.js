@@ -28,6 +28,12 @@ app.get("/messages", userController.getMessages);
 app.get("/users", userController.getUsers);
 app.post("/conversations", userController.createConversation);
 app.get("/admin-id", userController.getAdminId);
+
+// const express = require("express");
+// const userController = require("./src/user/user.controller.js");
+// const app = express();
+// app.use(express.json());
+// app.use("/api", userController);
 const port = process.env.PORT || 5002;
 const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);

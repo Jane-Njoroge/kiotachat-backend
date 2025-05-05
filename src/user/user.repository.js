@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+
 const prisma = new PrismaClient();
 
 const userRepository = {
@@ -36,6 +37,7 @@ const userRepository = {
       },
     });
   },
+
   async getAllUsers() {
     return await prisma.user.findMany({
       select: {
@@ -49,6 +51,7 @@ const userRepository = {
       orderBy: { createdAt: "desc" },
     });
   },
+
   async getAllChats() {
     return await prisma.conversation.findMany({
       include: {
@@ -87,6 +90,83 @@ const userRepository = {
         },
       },
       orderBy: { createdAt: "asc" },
+    });
+  },
+
+  async searchUsers(query, excludeUserId) {
+    return await prisma.user.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { fullName: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+            ],
+          },
+          { id: { not: excludeUserId } }, // Exclude the requesting user
+          { role: "USER" }, // Only return non-admin users for admin searches
+        ],
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phoneNumber: true,
+        role: true,
+      },
+    });
+  },
+
+  async searchConversations(query, userId, role) {
+    const whereClause = {
+      OR: [
+        {
+          messages: {
+            some: {
+              content: { contains: query, mode: "insensitive" },
+            },
+          },
+        },
+      ],
+    };
+
+    if (role === "USER") {
+      whereClause.OR.push({
+        userId: userId, // User can only see their own conversations
+      });
+    } else if (role === "ADMIN") {
+      whereClause.OR.push({
+        adminId: userId, // Admin can only see their own conversations
+      });
+    }
+
+    return await prisma.conversation.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+          },
+        },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: "desc" },
+          include: {
+            sender: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
     });
   },
 };

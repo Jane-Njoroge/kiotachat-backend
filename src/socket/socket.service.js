@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-// import prisma from "../prisma.js"; // Ensure prisma.js exports the PrismaClient instance
+import prisma from "../prisma.js";
 
 let io;
 const userSocketMap = new Map();
@@ -17,7 +17,7 @@ export const initializeSocket = (server) => {
   io.on("connection", (socket) => {
     console.log("New connection:", socket.id);
 
-    socket.on("register", async ({ userId, role }) => {
+    socket.on("register", ({ userId, role }) => {
       if (role === "ADMIN") {
         adminSocketMap.set(userId, socket.id);
       } else {
@@ -27,13 +27,13 @@ export const initializeSocket = (server) => {
         `Registered ${role} with userId ${userId} and socketId ${socket.id}`
       );
     });
+
     socket.on(
       "private message",
       async ({ content, to, from, conversationId }) => {
         try {
-          let conversation;
-
-          conversation = await prisma.conversation.findFirst({
+          // Find or create a conversation
+          let conversation = await prisma.conversation.findFirst({
             where: {
               OR: [
                 { id: conversationId },
@@ -46,48 +46,70 @@ export const initializeSocket = (server) => {
           if (!conversation) {
             const sender = await prisma.user.findUnique({
               where: { id: from },
+              select: { role: true },
             });
+
+            if (!sender) {
+              throw new Error("Sender not found");
+            }
+
             conversation = await prisma.conversation.create({
               data: {
-                userId: sender?.role === "USER" ? from : to,
-                adminId: sender?.role === "ADMIN" ? from : to,
+                userId: sender.role === "USER" ? from : to,
+                adminId: sender.role === "ADMIN" ? from : to,
               },
             });
           }
 
+          // Create the message
           const message = await prisma.message.create({
             data: {
               content,
               senderId: from,
               conversationId: conversation.id,
             },
-            include: { sender: true },
-            // include: {
-            //   sender: {
-            //     select: {
-            //       id: true,
-            //       fullName: true,
-            //     },
-            //   },
-            // },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  role: true,
+                },
+              },
+            },
           });
+
+          // Format the message to match frontend expectations
+          const formattedMessage = {
+            id: message.id,
+            content: message.content,
+            senderId: message.senderId,
+            createdAt: message.createdAt.toISOString(),
+            sender: {
+              id: message.sender.id,
+              fullName: message.sender.fullName,
+              email: message.sender.email,
+              role: message.sender.role,
+            },
+            conversationId: conversation.id,
+          };
+
+          // Determine recipient
           const recipientId =
             from === conversation.userId
               ? conversation.adminId
               : conversation.userId;
           const recipientSocketId =
-            userSocketMap.get(to) || adminSocketMap.get(to);
+            userSocketMap.get(recipientId) || adminSocketMap.get(recipientId);
+
+          // Emit to recipient if they are connected
           if (recipientSocketId) {
-            io.to(recipientSocketId).emit("private message", {
-              ...message,
-              // conversationId: conversation.id,
-            });
+            io.to(recipientSocketId).emit("private message", formattedMessage);
           }
 
-          socket.emit("private message", {
-            // ...message,
-            // conversationId: conversation.id,
-          });
+          // Emit back to sender
+          io.to(socket.id).emit("private message", formattedMessage);
         } catch (error) {
           console.error("Message send error:", error);
           socket.emit("error", { message: "Failed to send message" });
