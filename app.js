@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 dotenv.config();
 
 const app = express();
+
 app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:3000",
@@ -16,6 +17,7 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
   })
 );
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -23,17 +25,22 @@ app.post("/register", userController.register);
 app.post("/login", userController.login);
 app.post("/generate-otp", userController.generateOtp);
 app.post("/verify-otp", userController.verifyOtp);
-// app.get("/conversations", userController.getConversations);
-app.get("/messages", userController.getMessages);
-app.get("/users", userController.getUsers);
+
+app.get("/conversations", userController.getConversations);
 app.post("/conversations", userController.createConversation);
+
+app.get("/messages", userController.getMessages);
+
+app.get("/users", userController.getUsers);
 app.get("/admin-id", userController.getAdminId);
 
-// const express = require("express");
-// const userController = require("./src/user/user.controller.js");
-// const app = express();
-// app.use(express.json());
-// app.use("/api", userController);
+app.get("/search/conversations", userController.searchConversations);
+app.get("/search/users", userController.searchUsers);
+
+app.use((req, res) => {
+  res.status(404).send("Not found");
+});
+
 const port = process.env.PORT || 5002;
 const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);

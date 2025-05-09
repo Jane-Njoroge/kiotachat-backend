@@ -1,6 +1,4 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../prisma.js";
 
 const userRepository = {
   async createUser({ fullName, email, phoneNumber, password }) {
@@ -14,9 +12,7 @@ const userRepository = {
   },
 
   async saveOtp(userId, otp, expiresAt) {
-    return await prisma.oTP.create({
-      data: { userId, otp, expiresAt },
-    });
+    return await prisma.oTP.create({ data: { userId, otp, expiresAt } });
   },
 
   async findLatestOtp(userId) {
@@ -30,16 +26,15 @@ const userRepository = {
     return await prisma.oTP.delete({ where: { id: otpId } });
   },
 
-  async createChat(userId) {
+  async createChat(userId, adminId) {
     return await prisma.conversation.create({
-      data: {
-        userId,
-      },
+      data: { userId, adminId },
     });
   },
 
-  async getAllUsers() {
+  async getAllUsers(role) {
     return await prisma.user.findMany({
+      where: role ? { role } : {},
       select: {
         id: true,
         fullName: true,
@@ -55,13 +50,8 @@ const userRepository = {
   async getAllChats() {
     return await prisma.conversation.findMany({
       include: {
-        user: {
-          select: { id: true, fullName: true, email: true },
-        },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1, // Get the latest message
-        },
+        user: { select: { id: true, fullName: true, email: true } },
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
   },
@@ -70,13 +60,8 @@ const userRepository = {
     return await prisma.conversation.findMany({
       where: { userId },
       include: {
-        user: {
-          select: { id: true, fullName: true, email: true },
-        },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
+        user: { select: { id: true, fullName: true, email: true } },
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
   },
@@ -84,11 +69,7 @@ const userRepository = {
   async getMessages(conversationId) {
     return await prisma.message.findMany({
       where: { conversationId },
-      include: {
-        sender: {
-          select: { id: true, fullName: true },
-        },
-      },
+      include: { sender: { select: { id: true, fullName: true } } },
       orderBy: { createdAt: "asc" },
     });
   },
@@ -103,8 +84,8 @@ const userRepository = {
               { email: { contains: query, mode: "insensitive" } },
             ],
           },
-          { id: { not: excludeUserId } }, // Exclude the requesting user
-          { role: "USER" }, // Only return non-admin users for admin searches
+          { id: { not: excludeUserId } },
+          { role: "USER" },
         ],
       },
       select: {
@@ -118,55 +99,35 @@ const userRepository = {
   },
 
   async searchConversations(query, userId, role) {
+    if (!userId || !role) throw new Error("Missing required parameters");
+
     const whereClause = {
       OR: [
         {
           messages: {
-            some: {
-              content: { contains: query, mode: "insensitive" },
-            },
+            some: { content: { contains: query, mode: "insensitive" } },
+          },
+        },
+        {
+          user: {
+            OR: [
+              { fullName: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+            ],
           },
         },
       ],
     };
 
-    if (role === "USER") {
-      whereClause.OR.push({
-        userId: userId, // User can only see their own conversations
-      });
-    } else if (role === "ADMIN") {
-      whereClause.OR.push({
-        adminId: userId, // Admin can only see their own conversations
-      });
-    }
+    if (role === "USER") whereClause.userId = userId;
+    else if (role === "ADMIN") whereClause.adminId = userId;
 
     return await prisma.conversation.findMany({
       where: whereClause,
       include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            role: true,
-          },
-        },
-        messages: {
-          take: 1,
-          orderBy: { createdAt: "desc" },
-          include: {
-            sender: {
-              select: {
-                id: true,
-                fullName: true,
-                email: true,
-                role: true,
-              },
-            },
-          },
-        },
+        user: true,
+        messages: { take: 1, orderBy: { createdAt: "desc" } },
       },
-      orderBy: { updatedAt: "desc" },
     });
   },
 };

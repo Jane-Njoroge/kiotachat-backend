@@ -32,13 +32,12 @@ export const initializeSocket = (server) => {
       "private message",
       async ({ content, to, from, conversationId }) => {
         try {
-          // Find or create a conversation
           let conversation = await prisma.conversation.findFirst({
             where: {
               OR: [
                 { id: conversationId },
-                { userId: to, adminId: from },
-                { userId: from, adminId: to },
+                { AND: [{ userId: to }, { adminId: from }] },
+                { AND: [{ userId: from }, { adminId: to }] },
               ],
             },
           });
@@ -48,10 +47,7 @@ export const initializeSocket = (server) => {
               where: { id: from },
               select: { role: true },
             });
-
-            if (!sender) {
-              throw new Error("Sender not found");
-            }
+            if (!sender) throw new Error("Sender not found");
 
             conversation = await prisma.conversation.create({
               data: {
@@ -61,7 +57,6 @@ export const initializeSocket = (server) => {
             });
           }
 
-          // Create the message
           const message = await prisma.message.create({
             data: {
               content,
@@ -80,22 +75,13 @@ export const initializeSocket = (server) => {
             },
           });
 
-          // Format the message to match frontend expectations
           const formattedMessage = {
-            id: message.id,
-            content: message.content,
-            senderId: message.senderId,
+            ...message,
             createdAt: message.createdAt.toISOString(),
-            sender: {
-              id: message.sender.id,
-              fullName: message.sender.fullName,
-              email: message.sender.email,
-              role: message.sender.role,
-            },
+            sender: message.sender,
             conversationId: conversation.id,
           };
 
-          // Determine recipient
           const recipientId =
             from === conversation.userId
               ? conversation.adminId
@@ -103,25 +89,24 @@ export const initializeSocket = (server) => {
           const recipientSocketId =
             userSocketMap.get(recipientId) || adminSocketMap.get(recipientId);
 
-          // Emit to recipient if they are connected
           if (recipientSocketId) {
             io.to(recipientSocketId).emit("private message", formattedMessage);
           }
-
-          // Emit back to sender
-          io.to(socket.id).emit("private message", formattedMessage);
+          socket.emit("private message", formattedMessage);
         } catch (error) {
           console.error("Message send error:", error);
-          socket.emit("error", { message: "Failed to send message" });
+          socket.emit("error", {
+            message: error.message || "Failed to send message",
+          });
         }
       }
     );
 
     socket.on("disconnect", () => {
-      userSocketMap.forEach((value, key) => {
+      [...userSocketMap.entries()].forEach(([key, value]) => {
         if (value === socket.id) userSocketMap.delete(key);
       });
-      adminSocketMap.forEach((value, key) => {
+      [...adminSocketMap.entries()].forEach(([key, value]) => {
         if (value === socket.id) adminSocketMap.delete(key);
       });
       console.log("Disconnected:", socket.id);

@@ -2,7 +2,6 @@ import bcrypt from "bcrypt";
 import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtp } from "../utils/nodemailer.js";
 import userRepository from "./user.repository.js";
-import { Prisma } from "@prisma/client";
 
 const userService = {
   async registerUser({ fullName, email, phoneNumber, password }) {
@@ -32,9 +31,8 @@ const userService = {
 
     await userRepository.saveOtp(user.id, otp, expiresAt);
     await sendOtp(email, otp);
-    console.log("DEV OTP ${email}: ${otp}");
+
     return { message: "proceed to OTP entry" };
-    //eturn { message: "OTP sent to email", userId: user.id };
   },
 
   async generateUserOtp(email) {
@@ -69,23 +67,13 @@ const userService = {
       userId: user.id,
     };
   },
+
   async getAllUsers(role) {
-    return await Prisma.user.findMany({
-      where: role ? { role } : {},
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        phoneNumber: true,
-        role: true,
-        createdAt: true,
-      },
-      ordeBy: { createdAt: "desc" },
-    });
+    return await userRepository.getAllUsers(role);
   },
 
-  async createConversation(userId) {
-    return await userRepository.createChat(userId);
+  async createConversation(userId, adminId) {
+    return await userRepository.createChat(userId, adminId);
   },
 
   async getConversations(userId, role) {
@@ -96,18 +84,16 @@ const userService = {
     }
   },
 
+  async searchConversations(query, userId, role) {
+    return await userRepository.searchConversations(query, userId, role);
+  },
+
+  async searchUsers(query, excludeUserId) {
+    return await userRepository.searchUsers(query, excludeUserId);
+  },
+
   async getMessages(conversationId) {
-    return await Prisma.message.findMany({
-      where: { conversationId },
-      include: {
-        sender: true,
-        conversation: {
-          include: {
-            user: true,
-          },
-        },
-      },
-    });
+    return await userRepository.getMessages(conversationId);
   },
 };
 
