@@ -1,6 +1,9 @@
 import axios from "axios";
 
 export const sendOtp = async (email, otp) => {
+  if (!email || !/\S+@\S+\.\S+/.test(email)) {
+    throw new Error("Invalid email address");
+  }
   try {
     const data = {
       to: email,
@@ -12,7 +15,13 @@ export const sendOtp = async (email, otp) => {
 
     const response = await axios.post(
       "https://fms-backend-staging.staging.kiotapay.co.ke/api/v1/emails/send",
-      data
+      data,
+      {
+        headers: {
+          Authorization: `Bearer YOUR_API_TOKEN`,
+          "Content-Type": "application/json",
+        },
+      }
     );
 
     console.log("Response from API:", response.data);

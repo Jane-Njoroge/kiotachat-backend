@@ -26,15 +26,34 @@ const userRepository = {
     return await prisma.oTP.delete({ where: { id: otpId } });
   },
 
-  async createChat(userId, adminId) {
+  async createChat(participant1Id, participant2Id) {
     return await prisma.conversation.create({
-      data: { userId, adminId },
+      data: {
+        participant1Id,
+        participant2Id,
+        unread: 0,
+      },
+      include: {
+        participant1: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        participant2: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        messages: {
+          include: {
+            sender: {
+              select: { id: true, fullName: true, email: true, role: true },
+            },
+          },
+        },
+      },
     });
   },
 
   async getAllUsers(role) {
     return await prisma.user.findMany({
-      where: role ? { role } : {},
+      where: role ? { role: { equals: role, mode: "insensitive" } } : {},
       select: {
         id: true,
         fullName: true,
@@ -47,34 +66,50 @@ const userRepository = {
     });
   },
 
-  async getAllChats() {
+  async getChatsByUserId(userId) {
     return await prisma.conversation.findMany({
-      include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      where: {
+        OR: [
+          { participant1Id: parseInt(userId, 10) },
+          { participant2Id: parseInt(userId, 10) },
+        ],
       },
-    });
-  },
-
-  async getChatByUserId(userId) {
-    return await prisma.conversation.findMany({
-      where: { userId },
       include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        participant1: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        participant2: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        messages: {
+          include: {
+            sender: {
+              select: { id: true, fullName: true, email: true, role: true },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
     });
   },
 
   async getMessages(conversationId) {
     return await prisma.message.findMany({
-      where: { conversationId },
-      include: { sender: { select: { id: true, fullName: true } } },
+      where: { conversationId: parseInt(conversationId, 10) },
+      include: {
+        sender: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+      },
       orderBy: { createdAt: "asc" },
     });
   },
 
-  async searchUsers(query, excludeUserId) {
+  async searchUsers(query, excludeUserId, role) {
+    let excludeId = parseInt(excludeUserId, 10);
+    if (isNaN(excludeId)) excludeId = undefined;
+
     return await prisma.user.findMany({
       where: {
         AND: [
@@ -84,8 +119,8 @@ const userRepository = {
               { email: { contains: query, mode: "insensitive" } },
             ],
           },
-          { id: { not: excludeUserId } },
-          { role: "USER" },
+          excludeId ? { id: { not: excludeId } } : {},
+          role ? { role: { equals: role, mode: "insensitive" } } : {},
         ],
       },
       select: {
@@ -99,7 +134,7 @@ const userRepository = {
   },
 
   async searchConversations(query, userId, role) {
-    if (!userId || !role) throw new Error("Missing required parameters");
+    if (!userId) throw new Error("Missing required parameters");
 
     const whereClause = {
       OR: [
@@ -109,7 +144,15 @@ const userRepository = {
           },
         },
         {
-          user: {
+          participant1: {
+            OR: [
+              { fullName: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+            ],
+          },
+        },
+        {
+          participant2: {
             OR: [
               { fullName: { contains: query, mode: "insensitive" } },
               { email: { contains: query, mode: "insensitive" } },
@@ -117,16 +160,34 @@ const userRepository = {
           },
         },
       ],
+      AND: [
+        {
+          OR: [
+            { participant1Id: parseInt(userId, 10) },
+            { participant2Id: parseInt(userId, 10) },
+          ],
+        },
+      ],
     };
-
-    if (role === "USER") whereClause.userId = userId;
-    else if (role === "ADMIN") whereClause.adminId = userId;
 
     return await prisma.conversation.findMany({
       where: whereClause,
       include: {
-        user: true,
-        messages: { take: 1, orderBy: { createdAt: "desc" } },
+        participant1: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        participant2: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        messages: {
+          include: {
+            sender: {
+              select: { id: true, fullName: true, email: true, role: true },
+            },
+          },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
   },

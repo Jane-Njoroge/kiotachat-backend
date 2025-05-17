@@ -51,6 +51,10 @@ const userService = {
   async verifyUserOtp(email, otp) {
     const user = await userRepository.findUserByEmail(email);
     if (!user) throw new Error("User not found");
+    console.log("verifying OTP for user:", {
+      userId: user.id,
+      role: user.role,
+    });
 
     const latestOtp = await userRepository.findLatestOtp(user.id);
     if (!latestOtp || latestOtp.otp !== otp) throw new Error("Invalid OTP");

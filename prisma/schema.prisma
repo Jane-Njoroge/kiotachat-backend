@@ -1,50 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 model User {
-  id          String  @id @default(uuid())
-  fullName    String
-  email       String  @unique
-  phoneNumber String?
-  password    String
-  role        Role    @default(USER)
-  otps        OTP[]
-
-  userConversations  Conversation[] @relation("UserConversations")
-  adminConversations Conversation[] @relation("AdminConversations")
-
-  messages Message[]
-}
-
-model Conversation {
-  id      String  @id @default(uuid())
-  userId  String
-  adminId String?
-
-  user  User  @relation("UserConversations", fields: [userId], references: [id])
-  admin User? @relation("AdminConversations", fields: [adminId], references: [id])
-
-  messages  Message[]
-  createdAt DateTime  @default(now())
-}
-
-model Message {
-  id             String       @id @default(uuid())
-  content        String
-  senderId       String
-  sender         User         @relation(fields: [senderId], references: [id])
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  createdAt      DateTime     @default(now())
+  id                Int            @id @default(autoincrement())
+  fullName          String
+  email             String         @unique
+  phoneNumber       String?
+  password          String
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  role              String         @default("USER")
+  otps              OTP[]
+  participant1Chats Conversation[] @relation("Participant1Chats")
+  participant2Chats Conversation[] @relation("Participant2Chats")
+  messages          Message[]
 }
 
 model OTP {
-  id        String   @id @default(uuid())
+  id        Int      @id @default(autoincrement())
+  userId    Int
   otp       String
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  expiresAt DateTime
   createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
 }
 
-enum Role {
-  USER
-  ADMIN
+model Conversation {
+  id             Int       @id @default(autoincrement())
+  participant1Id Int
+  participant2Id Int
+  participant1   User      @relation("Participant1Chats", fields: [participant1Id], references: [id])
+  participant2   User      @relation("Participant2Chats", fields: [participant2Id], references: [id])
+  messages       Message[]
+  unread         Int
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  senderId       Int
+  content        String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation(fields: [senderId], references: [id])
 }

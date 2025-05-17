@@ -4,10 +4,14 @@ import cors from "cors";
 import userController from "./src/user/user.controller.js";
 import { initializeSocket } from "./src/socket/socket.service.js";
 import cookieParser from "cookie-parser";
+import http from "http";
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
+
+initializeSocket(server);
 
 app.use(
   cors({
@@ -19,7 +23,13 @@ app.use(
 );
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+app.use((req, res, next) => {
+  console.log(`Incoming request: ${req.method} ${req.url}`);
+  next();
+});
 
 app.post("/register", userController.register);
 app.post("/login", userController.login);
@@ -27,23 +37,28 @@ app.post("/generate-otp", userController.generateOtp);
 app.post("/verify-otp", userController.verifyOtp);
 
 app.get("/conversations", userController.getConversations);
-app.post("/conversations", userController.createConversation);
+app.post("/conversations", (req, res, next) => {
+  console.log("POST /conversations hit with body:", req.body);
+  userController.createConversation(req, res, next);
+});
 
 app.get("/messages", userController.getMessages);
 
 app.get("/users", userController.getUsers);
 app.get("/admin-id", userController.getAdminId);
+app.get("/users/:id", userController.getUserById);
 
 app.get("/search/conversations", userController.searchConversations);
 app.get("/search/users", userController.searchUsers);
 
+app.post("/conversations/:id/read", userController.markConversationRead);
+
 app.use((req, res) => {
-  res.status(404).send("Not found");
+  console.log(`Route not found: ${req.method} ${req.url}`);
+  res.status(404).json({ message: "Route not found" });
 });
 
 const port = process.env.PORT || 5002;
-const server = app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
-
-initializeSocket(server);
