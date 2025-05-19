@@ -76,16 +76,57 @@ const userService = {
     return await userRepository.getAllUsers(role);
   },
 
-  async createConversation(userId, adminId) {
-    return await userRepository.createChat(userId, adminId);
-  },
+  async createConversation(participant1Id, participant2Id) {
+    const parsedParticipant1Id = parseInt(participant1Id, 10);
+    const parsedParticipant2Id = parseInt(participant2Id, 10);
 
-  async getConversations(userId, role) {
-    if (role === "ADMIN") {
-      return await userRepository.getAllChats();
-    } else {
-      return await userRepository.getChatByUserId(userId);
+    if (
+      isNaN(parsedParticipant1Id) ||
+      isNaN(parsedParticipant2Id) ||
+      parsedParticipant1Id === parsedParticipant2Id
+    ) {
+      throw new Error("Valid and distinct participant IDs are required");
     }
+
+    // Check if conversation already exists
+    const existingConversation = await prisma.conversation.findFirst({
+      where: {
+        OR: [
+          {
+            participant1Id: parsedParticipant1Id,
+            participant2Id: parsedParticipant2Id,
+          },
+          {
+            participant1Id: parsedParticipant2Id,
+            participant2Id: parsedParticipant1Id,
+          },
+        ],
+      },
+      include: {
+        participant1: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        participant2: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        messages: {
+          include: {
+            sender: {
+              select: { id: true, fullName: true, email: true, role: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (existingConversation) {
+      return existingConversation;
+    }
+
+    return await userRepository.createChat(
+      parsedParticipant1Id,
+      parsedParticipant2Id
+    );
   },
 
   async searchConversations(query, userId, role) {
@@ -98,6 +139,10 @@ const userService = {
 
   async getMessages(conversationId) {
     return await userRepository.getMessages(conversationId);
+  },
+
+  async markConversationAsRead(conversationId) {
+    return await userRepository.markConversationAsRead(conversationId);
   },
 };
 

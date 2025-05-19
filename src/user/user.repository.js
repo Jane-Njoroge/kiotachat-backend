@@ -66,7 +66,7 @@ const userRepository = {
     });
   },
 
-  async getChatsByUserId(userId) {
+  async getChatByUserId(userId) {
     return await prisma.conversation.findMany({
       where: {
         OR: [
@@ -91,12 +91,16 @@ const userRepository = {
           take: 1,
         },
       },
+      orderBy: { updatedAt: "desc" },
     });
   },
-
   async getMessages(conversationId) {
-    return await prisma.message.findMany({
-      where: { conversationId: parseInt(conversationId, 10) },
+    const parsedConversationId = parseInt(conversationId, 10);
+    if (isNaN(parsedConversationId)) {
+      throw new Error("Valid conversationId is required");
+    }
+    const messages = await prisma.message.findMany({
+      where: { conversationId: parsedConversationId },
       include: {
         sender: {
           select: { id: true, fullName: true, email: true, role: true },
@@ -104,8 +108,11 @@ const userRepository = {
       },
       orderBy: { createdAt: "asc" },
     });
+    return messages.map((msg) => ({
+      ...msg,
+      id: String(msg.id), // Convert ID to string
+    }));
   },
-
   async searchUsers(query, excludeUserId, role) {
     let excludeId = parseInt(excludeUserId, 10);
     if (isNaN(excludeId)) excludeId = undefined;

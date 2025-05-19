@@ -1,270 +1,153 @@
 import userService from "./user.service.js";
-import prisma from "../prisma.js";
-import { getIo, userSocketMap } from "../socket/socket.service.js";
 
 const userController = {
   async register(req, res) {
     try {
-      const result = await userService.registerUser(req.body);
+      const { fullName, email, phoneNumber, password } = req.body;
+      if (!fullName || !email || !phoneNumber || !password) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      const result = await userService.registerUser({
+        fullName,
+        email,
+        phoneNumber,
+        password,
+      });
       res.status(201).json(result);
     } catch (error) {
-      res.status(400).json({ message: error.message });
+      console.error("Registration error:", error);
+      res.status(400).json({ message: error.message || "Registration failed" });
     }
   },
 
   async login(req, res) {
     try {
-      const result = await userService.loginUser(
-        req.body.email,
-        req.body.password
-      );
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res
+          .status(400)
+          .json({ message: "Email and password are required" });
+      }
+      const result = await userService.loginUser(email, password);
       res.json(result);
     } catch (error) {
-      console.error("login error:", error.message);
-      res.status(401).json({ message: error.message });
-    }
-  },
-
-  async generateOtp(req, res) {
-    try {
-      const { email } = req.body;
-      if (!email) return res.status(400).json({ message: "Email is required" });
-      const result = await userService.generateUserOtp(email);
-      res.json(result);
-    } catch (error) {
-      res.status(400).json({ message: error.message });
+      console.error("Login error:", error);
+      res.status(400).json({ message: error.message || "Login failed" });
     }
   },
 
   async verifyOtp(req, res) {
     try {
-      const result = await userService.verifyUserOtp(
-        req.body.email,
-        req.body.otp
-      );
-      res.json({ ...result, userId: result.userId });
+      const { email, otp } = req.body;
+      if (!email || !otp) {
+        return res.status(400).json({ message: "Email and OTP are required" });
+      }
+      const result = await userService.verifyUserOtp(email, otp);
+      res.json(result);
     } catch (error) {
-      res.status(400).json({ message: error.message });
+      console.error("OTP verification error:", error);
+      res
+        .status(400)
+        .json({ message: error.message || "OTP verification failed" });
     }
   },
 
   async getUsers(req, res) {
     try {
-      const role = req.query.role;
+      const { role } = req.query;
       const users = await userService.getAllUsers(role);
       res.json(users);
     } catch (error) {
-      res.status(400).json({ message: error.message });
-    }
-  },
-
-  async getUserById(req, res) {
-    try {
-      const { id } = req.params;
-      const userId = parseInt(id);
-      if (isNaN(userId)) {
-        return res.status(400).json({ message: "Invalid user ID" });
-      }
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          phoneNumber: true,
-          role: true,
-        },
-      });
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      res.json(user);
-    } catch (error) {
-      console.error("Get user error:", error);
+      console.error("Get users error:", error);
       res
-        .status(400)
-        .json({ message: error.message || "Failed to fetch user" });
-    }
-  },
-
-  async getAdminId(req, res) {
-    try {
-      const admin = await prisma.user.findFirst({
-        where: { role: { equals: "ADMIN", mode: "insensitive" } },
-        select: { id: true },
-      });
-      res.json({ adminId: admin?.id });
-    } catch (error) {
-      res.status(400).json({ message: error.message });
+        .status(500)
+        .json({ message: error.message || "Failed to fetch users" });
     }
   },
 
   async createConversation(req, res) {
     try {
-      let { participant1Id, participant2Id } = req.body;
-      console.log("createConversation called with:", {
-        participant1Id,
-        participant2Id,
-        body: req.body,
-      });
-
-      // Validate input
+      const { participant1Id, participant2Id } = req.body;
       if (!participant1Id || !participant2Id) {
-        console.log("Missing participant1Id or participant2Id:", {
-          participant1Id,
-          participant2Id,
-        });
         return res
           .status(400)
-          .json({ message: "participant1Id and participant2Id are required" });
+          .json({ message: "Both participant IDs are required" });
       }
-
-      // Parse IDs as integers
-      participant1Id = parseInt(participant1Id, 10);
-      participant2Id = parseInt(participant2Id, 10);
-
-      // Validate parsed IDs
-      if (isNaN(participant1Id) || isNaN(participant2Id)) {
-        console.log("Invalid participant1Id or participant2Id after parsing:", {
-          participant1Id,
-          participant2Id,
-        });
-        return res
-          .status(400)
-          .json({ message: "Invalid participant1Id or participant2Id" });
-      }
-
-      // Prevent self-conversation
-      if (participant1Id === participant2Id) {
-        console.log("Cannot create conversation with same user:", {
-          participant1Id,
-          participant2Id,
-        });
-        return res
-          .status(400)
-          .json({ message: "Cannot create conversation with yourself" });
-      }
-
-      // Fetch participants
-      const participant1 = await prisma.user.findUnique({
-        where: { id: participant1Id },
-        select: { id: true, fullName: true, email: true, role: true },
-      });
-      const participant2 = await prisma.user.findUnique({
-        where: { id: participant2Id },
-        select: { id: true, fullName: true, email: true, role: true },
-      });
-
-      if (!participant1) {
-        console.log(
-          `Participant not found for participant1Id: ${participant1Id}`
-        );
-        return res.status(404).json({ message: "Participant 1 not found" });
-      }
-      if (!participant2) {
-        console.log(
-          `Participant not found for participant2Id: ${participant2Id}`
-        );
-        return res.status(404).json({ message: "Participant 2 not found" });
-      }
-
-      // Check for existing conversation
-      let conversation = await prisma.conversation.findFirst({
-        where: {
-          OR: [
-            { participant1Id, participant2Id },
-            { participant1Id: participant2Id, participant2Id: participant1Id },
-          ],
-        },
-        include: {
-          participant1: {
-            select: { id: true, fullName: true, email: true, role: true },
-          },
-          participant2: {
-            select: { id: true, fullName: true, email: true, role: true },
-          },
-          messages: {
-            include: {
-              sender: {
-                select: { id: true, fullName: true, email: true, role: true },
-              },
-            },
-          },
-        },
-      });
-
-      if (!conversation) {
-        console.log("Creating new conversation for:", {
-          participant1Id,
-          participant2Id,
-        });
-        conversation = await prisma.conversation.create({
-          data: {
-            participant1Id,
-            participant2Id,
-            unread: 0,
-          },
-          include: {
-            participant1: {
-              select: { id: true, fullName: true, email: true, role: true },
-            },
-            participant2: {
-              select: { id: true, fullName: true, email: true, role: true },
-            },
-            messages: {
-              include: {
-                sender: {
-                  select: { id: true, fullName: true, email: true, role: true },
-                },
-              },
-            },
-          },
-        });
-      } else {
-        console.log("Found existing conversation:", conversation.id);
-      }
-
-      // Emit conversation update via socket
-      const io = getIo();
-      const socket1Id = userSocketMap.get(participant1Id);
-      const socket2Id = userSocketMap.get(participant2Id);
-      if (socket1Id) {
-        io.to(socket1Id).emit("conversation updated", conversation);
-      }
-      if (socket2Id) {
-        io.to(socket2Id).emit("conversation updated", conversation);
-      }
-
-      res.status(200).json(conversation);
+      const conversation = await userService.createConversation(
+        participant1Id,
+        participant2Id
+      );
+      res.status(201).json(conversation);
     } catch (error) {
-      console.error("createConversation error:", error.message, error.stack);
-      res.status(500).json({ message: "Failed to create conversation" });
+      console.error("Create conversation error:", error);
+      res
+        .status(400)
+        .json({ message: error.message || "Failed to create conversation" });
     }
   },
 
   async getConversations(req, res) {
     try {
-      const userId = parseInt(req.query.userId, 10);
-      const role = req.cookies.userRole || req.query.role;
-      if (isNaN(userId)) {
-        return res.status(400).json({ message: "Invalid userId" });
+      const { userId, role, tab } = req.query;
+      console.log("Fetching conversations for:", { userId, role, tab });
+
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
       }
-      const conversations = await userService.getConversations(userId, role);
-      res.json(conversations);
+      const parsedUserId = parseInt(userId, 10);
+      if (isNaN(parsedUserId)) {
+        return res
+          .status(400)
+          .json({ message: "userId must be a valid number" });
+      }
+      if (!role || !["ADMIN", "USER"].includes(role.toUpperCase())) {
+        return res
+          .status(400)
+          .json({ message: "Valid role (ADMIN or USER) is required" });
+      }
+      if (
+        role.toUpperCase() === "USER" &&
+        tab &&
+        !["all", "unread"].includes(tab.toLowerCase())
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Invalid tab parameter. Use 'all' or 'unread'" });
+      }
+
+      const conversations = await userService.getConversations(
+        parsedUserId,
+        role,
+        tab
+      );
+      res.json(conversations || []);
     } catch (error) {
-      res.status(400).json({ message: error.message });
+      console.error("Get conversations error:", error);
+      res
+        .status(400)
+        .json({ message: error.message || "Failed to fetch conversations" });
     }
   },
 
-  async getMessages(req, res) {
+  async searchConversations(req, res) {
     try {
-      const { conversationId } = req.query;
-      const messages = await userService.getMessages(
-        parseInt(conversationId, 10)
+      const { query, userId, role } = req.query;
+      if (!query || !userId || !role) {
+        return res
+          .status(400)
+          .json({ message: "Query, userId, and role are required" });
+      }
+      const conversations = await userService.searchConversations(
+        query,
+        userId,
+        role
       );
-      res.json(messages);
+      res.json(conversations);
     } catch (error) {
-      res.status(400).json({ message: error.message });
+      console.error("Search conversations error:", error);
+      res
+        .status(500)
+        .json({ message: error.message || "Failed to search conversations" });
     }
   },
 
@@ -272,51 +155,51 @@ const userController = {
     try {
       const { query, excludeUserId } = req.query;
       if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+      const users = await userService.searchUsers(query, excludeUserId);
+      res.json(users);
+    } catch (error) {
+      console.error("Search users error:", error);
+      res
+        .status(500)
+        .json({ message: error.message || "Failed to search users" });
+    }
+  },
+
+  async getMessages(req, res) {
+    try {
+      const { conversationId } = req.query;
+      if (!conversationId || isNaN(parseInt(conversationId, 10))) {
         return res
           .status(400)
-          .json({ message: "Query parameter 'query' is required" });
+          .json({ message: "Valid conversationId is required" });
       }
-      const results = await userService.searchUsers(query, excludeUserId);
-      res.json(results);
+      const messages = await userService.getMessages(conversationId);
+      res.json(messages);
     } catch (error) {
-      console.error("searchUsers error:", error);
-      res.status(400).json({ message: error.message || "Bad Request" });
+      console.error("Get messages error:", error);
+      res
+        .status(400)
+        .json({ message: error.message || "Failed to fetch messages" });
     }
   },
 
-  async markConversationRead(req, res) {
+  async markConversationAsRead(req, res) {
     try {
-      const { id } = req.params;
-      const conversationId = parseInt(id, 10);
-      if (isNaN(conversationId)) {
-        return res.status(400).json({ message: "Invalid conversation ID" });
+      const { conversationId } = req.params;
+      if (!conversationId || isNaN(parseInt(conversationId, 10))) {
+        return res
+          .status(400)
+          .json({ message: "Valid conversationId is required" });
       }
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data: { unread: 0 },
+      await userService.markConversationAsRead(conversationId);
+      res.json({ message: "Conversation marked as read" });
+    } catch (error) {
+      console.error("Mark conversation as read error:", error);
+      res.status(400).json({
+        message: error.message || "Failed to mark conversation as read",
       });
-      res.status(200).json({ message: "Conversation marked as read" });
-    } catch (error) {
-      console.error("Mark conversation read error:", error);
-      res.status(500).json({ message: "Failed to mark conversation as read" });
-    }
-  },
-
-  async searchConversations(req, res) {
-    try {
-      const { query, userId, role } = req.query;
-      const parsedUserId = parseInt(userId, 10);
-      if (isNaN(parsedUserId)) {
-        return res.status(400).json({ message: "Invalid userId" });
-      }
-      const results = await userService.searchConversations(
-        query,
-        parsedUserId,
-        role
-      );
-      res.json(results);
-    } catch (error) {
-      res.status(400).json({ message: error.message });
     }
   },
 };

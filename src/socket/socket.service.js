@@ -17,6 +17,11 @@ export const initializeSocket = (server) => {
   io.on("connection", (socket) => {
     console.log("New connection:", socket.id);
     socket.on("register", ({ userId, role }) => {
+      if (!userId || isNaN(parseInt(userId, 10))) {
+        console.error("Invalid userId during registration:", userId);
+        socket.emit("error", { message: "Invalid userId" });
+        return;
+      }
       console.log(`Registering user with userId ${userId}, role ${role}`);
       userSocketMap.set(parseInt(userId, 10), socket.id);
     });
@@ -74,20 +79,20 @@ export const initializeSocket = (server) => {
           });
 
           const formattedMessage = {
-            ...message,
-            createdAt: message.createdAt.toISOString(),
+            id: String(message.id),
+            content: message.content,
+            senderId: message.senderId,
             sender: message.sender,
+            createdAt: message.createdAt.toISOString(),
             conversationId: conversation.id,
           };
 
-          // Determine recipient and update unread count
           const recipientId =
             fromId === conversation.participant1Id
               ? conversation.participant2Id
               : conversation.participant1Id;
           const recipientSocketId = userSocketMap.get(recipientId);
 
-          // Emit message to recipient and sender
           if (recipientSocketId) {
             io.to(recipientSocketId).emit("private message", formattedMessage);
           } else {
@@ -98,7 +103,6 @@ export const initializeSocket = (server) => {
           }
           socket.emit("private message", formattedMessage);
 
-          // Fetch updated conversation
           const updatedConversation = await prisma.conversation.findUnique({
             where: { id: conversation.id },
             include: {
@@ -124,9 +128,16 @@ export const initializeSocket = (server) => {
             },
           });
 
-          // Emit conversation update to both parties
-          const socket1Id = userSocketMap.get(conversation.participant1Id);
-          const socket2Id = userSocketMap.get(conversation.participant2Id);
+          if (!updatedConversation) {
+            throw new Error("Failed to fetch updated conversation");
+          }
+
+          const socket1Id = userSocketMap.get(
+            updatedConversation.participant1Id
+          );
+          const socket2Id = userSocketMap.get(
+            updatedConversation.participant2Id
+          );
           if (socket1Id) {
             io.to(socket1Id).emit("conversation updated", updatedConversation);
           }
@@ -144,6 +155,9 @@ export const initializeSocket = (server) => {
 
     socket.on("conversation opened", async ({ conversationId }) => {
       try {
+        if (!conversationId || isNaN(parseInt(conversationId, 10))) {
+          throw new Error("Valid conversationId is required");
+        }
         const conversation = await prisma.conversation.update({
           where: { id: parseInt(conversationId, 10) },
           data: { unread: 0 },
@@ -177,8 +191,10 @@ export const initializeSocket = (server) => {
 
         console.log(`Conversation ${conversationId} opened, unread reset`);
       } catch (error) {
-        console.error("Conversation opened error:", error);
-        socket.emit("error", { message: "Failed to update conversation" });
+        console.error("Conversation Fetched:", error);
+        socket.emit("error", {
+          message: error.message || "Failed to update conversation",
+        });
       }
     });
 
