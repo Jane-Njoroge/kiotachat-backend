@@ -45,13 +45,13 @@ app.post("/conversations", (req, res, next) => {
 app.get("/messages", userController.getMessages);
 
 app.get("/users", userController.getUsers);
-app.get("/admin-id", userController.getAdminId);
-app.get("/users/:id", userController.getUserById);
+// app.get("/admin-id", userController.getAdminId);
+// app.get("/users/:id", userController.getUserById);
 
 app.get("/search/conversations", userController.searchConversations);
 app.get("/search/users", userController.searchUsers);
 
-app.post("/conversations/:id/read", userController.markConversationRead);
+app.post("/conversations/:id/read", userController.markConversationAsRead);
 
 app.use((req, res) => {
   console.log(`Route not found: ${req.method} ${req.url}`);

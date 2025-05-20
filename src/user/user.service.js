@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtp } from "../utils/nodemailer.js";
 import userRepository from "./user.repository.js";
+import { register } from "module";
 
 const userService = {
   async registerUser({ fullName, email, phoneNumber, password }) {
@@ -128,7 +129,43 @@ const userService = {
       parsedParticipant2Id
     );
   },
-
+  async getConversations(userId, role, tab) {
+    try {
+      const parsedUserId = parseInt(userId, 10);
+      if (isNaN(parsedUserId)) {
+        throw new Error("Valid userId is required");
+      }
+      if (!role || !["ADMIN", "USER"].includes(role.toUpperCase())) {
+        throw new Error("Valid role (ADMIN or USER) is required");
+      }
+      let conversations = await userRepository.getChatByUserId(parsedUserId);
+      if (role.toUpperCase() === "USER" && tab) {
+        if (tab.toLowerCase() === "unread") {
+          conversations = conversations.filter((conv) => conv.unread > 0);
+        }
+      }
+      return conversations.map((conv) => ({
+        ...conv,
+        id: String(conv.id),
+        participant1: {
+          ...conv.participant1,
+          id: String(conv.participant1.id),
+        },
+        participant2: {
+          ...conv.participant2,
+          id: String(conv.participant2.id),
+        },
+        messages: conv.messages.map((msg) => ({
+          ...msg,
+          id: String(msg.id),
+          sender: { ...msg.sender, id: String(msg.sender.id) },
+        })),
+      }));
+    } catch (error) {
+      console.error("Error in getConversations:", error);
+      throw new Error(error.message || "Failed to fetch conversations");
+    }
+  },
   async searchConversations(query, userId, role) {
     return await userRepository.searchConversations(query, userId, role);
   },

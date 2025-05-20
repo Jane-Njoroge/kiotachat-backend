@@ -1,3 +1,4 @@
+import { generateOtp } from "../utils/generateOtp.js";
 import userService from "./user.service.js";
 
 const userController = {
@@ -35,6 +36,21 @@ const userController = {
       res.status(400).json({ message: error.message || "Login failed" });
     }
   },
+  async generateOtp(req, res) {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is requires" });
+      }
+      const result = await userService.generateUserOtp(email);
+      res.json(result);
+    } catch (error) {
+      console.error("Generate OTP error:", error);
+      res
+        .status(400)
+        .json({ message: error.message || "Failed to generate OTP" });
+    }
+  },
 
   async verifyOtp(req, res) {
     try {
@@ -64,14 +80,25 @@ const userController = {
         .json({ message: error.message || "Failed to fetch users" });
     }
   },
-
   async createConversation(req, res) {
     try {
       const { participant1Id, participant2Id } = req.body;
+      console.log("POST /conversations received:", {
+        participant1Id,
+        participant2Id,
+      });
       if (!participant1Id || !participant2Id) {
         return res
           .status(400)
           .json({ message: "Both participant IDs are required" });
+      }
+      if (
+        isNaN(parseInt(participant1Id, 10)) ||
+        isNaN(parseInt(participant2Id, 10))
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Participant IDs must be valid numbers" });
       }
       const conversation = await userService.createConversation(
         participant1Id,
@@ -85,6 +112,26 @@ const userController = {
         .json({ message: error.message || "Failed to create conversation" });
     }
   },
+  // async createConversation(req, res) {
+  //   try {
+  //     const { participant1Id, participant2Id } = req.body;
+  //     if (!participant1Id || !participant2Id) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Both participant IDs are required" });
+  //     }
+  //     const conversation = await userService.createConversation(
+  //       participant1Id,
+  //       participant2Id
+  //     );
+  //     res.status(201).json(conversation);
+  //   } catch (error) {
+  //     console.error("Create conversation error:", error);
+  //     res
+  //       .status(400)
+  //       .json({ message: error.message || "Failed to create conversation" });
+  //   }
+  // },
 
   async getConversations(req, res) {
     try {
