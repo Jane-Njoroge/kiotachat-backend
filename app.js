@@ -43,6 +43,30 @@ app.post("/conversations", (req, res, next) => {
 });
 
 app.get("/messages", userController.getMessages);
+const authenticate = async (req, res, next) => {
+  let userId =
+    req.cookies.userId || req.headers["x-user-id"] || req.body.userId;
+  if (!userId || isNaN(parseInt(userId, 10))) {
+    console.log("Authentication failed: No valid userId found", {
+      cookies: req.cookies,
+      headers: req.headers,
+      body: req.body,
+    });
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  req.userId = parseInt(userId, 10);
+  console.log("Authenticated userId:", req.userId);
+  next();
+};
+// const authenticate = async (req, res, next) => {
+//   const userId = req.cookies.userId || req.headers["x-user-id"];
+//   if (!userId || isNaN(parseInt(userId, 10))) {
+//     return res.status(401).json({ message: "Authentication required" });
+//   }
+//   req.userId = parseInt(userId, 10);
+//   next();
+// };
+app.put("/messages/:messageId", authenticate, userController.updateMessage);
 
 app.get("/users", userController.getUsers);
 // app.get("/admin-id", userController.getAdminId);

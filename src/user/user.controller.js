@@ -59,6 +59,21 @@ const userController = {
         return res.status(400).json({ message: "Email and OTP are required" });
       }
       const result = await userService.verifyUserOtp(email, otp);
+      //set cookies for security enhancement
+      res.cookie("userId", result.userId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        path: "/",
+      });
+      res.cookie("userRole", result.role, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        path: "/",
+      });
       res.json(result);
     } catch (error) {
       console.error("OTP verification error:", error);
@@ -112,27 +127,69 @@ const userController = {
         .json({ message: error.message || "Failed to create conversation" });
     }
   },
-  // async createConversation(req, res) {
+  async updateMessage(req, res) {
+    try {
+      const { messageId } = req.params;
+      const { content } = req.body;
+      const userId = req.userId; //UserId from middleware
+      console.log("PUT /messages/:messageId received:", {
+        messageId,
+        content,
+        userId, // Undefined!
+        body: req.body,
+        headers: req.headers,
+      });
+      // const userId = req.userId;
+      if (!messageId || !content || isNaN(parseInt(messageId, 10))) {
+        console.log("Validation failed:", { messageId, content, userId });
+        return res
+          .status(400)
+          .json({ message: "Valid messageId and content are required" });
+      }
+      const message = await userService.updateMessage(
+        messageId,
+        content,
+        userId // Undefined!
+      );
+      res.json(message);
+    } catch (error) {
+      console.error("update message error:", error);
+      res
+        .status(400)
+        .json({ message: error.message || "Failed to update message" });
+    }
+  },
+  // async updateMessage(req, res) {
   //   try {
-  //     const { participant1Id, participant2Id } = req.body;
-  //     if (!participant1Id || !participant2Id) {
+  //     const { messageId } = req.params;
+  //     const { content } = req.body;
+  //     console.log("PUT /messages/:messageId received:", {
+  //       messageId,
+  //       content,
+  //       userId,
+  //       body: req.body,
+  //       headers: req.headers,
+  //     });
+  //     // const userId = req.userId;
+  //     if (!messageId || !content || isNaN(parseInt(messageId, 10))) {
+  //       console.log("Validation failed:", { messageId, content, userId });
   //       return res
   //         .status(400)
-  //         .json({ message: "Both participant IDs are required" });
+  //         .json({ message: "Valid messageId and content are required" });
   //     }
-  //     const conversation = await userService.createConversation(
-  //       participant1Id,
-  //       participant2Id
+  //     const message = await userService.updateMessage(
+  //       messageId,
+  //       content,
+  //       userId
   //     );
-  //     res.status(201).json(conversation);
+  //     res.json(message);
   //   } catch (error) {
-  //     console.error("Create conversation error:", error);
+  //     console.error("update message error:", error);
   //     res
   //       .status(400)
-  //       .json({ message: error.message || "Failed to create conversation" });
+  //       .json({ message: error.message || "Failed to update message" });
   //   }
   // },
-
   async getConversations(req, res) {
     try {
       const { userId, role, tab } = req.query;

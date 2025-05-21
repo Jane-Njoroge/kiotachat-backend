@@ -2,7 +2,8 @@ import bcrypt from "bcrypt";
 import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtp } from "../utils/nodemailer.js";
 import userRepository from "./user.repository.js";
-import { register } from "module";
+import prisma from "../prisma.js";
+//import { register } from "module";
 
 const userService = {
   async registerUser({ fullName, email, phoneNumber, password }) {
@@ -128,6 +129,44 @@ const userService = {
       parsedParticipant1Id,
       parsedParticipant2Id
     );
+  },
+  async updateMessage(messageId, content, userId) {
+    const parsedMessageId = parseInt(messageId, 10);
+    const parsedUserId = parseInt(userId, 10);
+    if (isNaN(parsedMessageId) || isNaN(parsedUserId) || !content.trim()) {
+      throw new Error("Valid messageId, userId, and content are required");
+    }
+
+    const message = await prisma.message.findUnique({
+      where: { id: parsedMessageId },
+      include: { sender: true },
+    });
+    if (!message) {
+      throw new Error("Message not found");
+    }
+    if (message.senderId !== parsedUserId) {
+      throw new Error("You can only edit your own messages");
+    }
+
+    const updatedMessage = await prisma.message.update({
+      where: { id: parsedMessageId },
+      data: { content },
+      include: {
+        sender: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+      },
+    });
+
+    return {
+      ...updatedMessage,
+      id: String(updatedMessage.id),
+      sender: {
+        ...updatedMessage.sender,
+        id: String(updatedMessage.sender.id),
+      },
+      conversationId: String(updatedMessage.conversationId),
+    };
   },
   async getConversations(userId, role, tab) {
     try {
