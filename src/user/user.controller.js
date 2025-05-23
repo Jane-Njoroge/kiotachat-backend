@@ -131,15 +131,19 @@ const userController = {
     try {
       const { messageId } = req.params;
       const { content } = req.body;
-      const userId = req.userId; //UserId from middleware
+      const userId = req.userId; // From middleware
       console.log("PUT /messages/:messageId received:", {
         messageId,
         content,
-        userId, // Undefined!
+        userId,
         body: req.body,
         headers: req.headers,
+        cookies: req.cookies,
       });
-      // const userId = req.userId;
+      if (!userId || isNaN(parseInt(userId, 10))) {
+        console.log("Missing or invalid userId:", { userId });
+        return res.status(401).json({ message: "Authentication required" });
+      }
       if (!messageId || !content || isNaN(parseInt(messageId, 10))) {
         console.log("Validation failed:", { messageId, content, userId });
         return res
@@ -149,7 +153,7 @@ const userController = {
       const message = await userService.updateMessage(
         messageId,
         content,
-        userId // Undefined!
+        userId
       );
       res.json(message);
     } catch (error) {
@@ -163,10 +167,11 @@ const userController = {
   //   try {
   //     const { messageId } = req.params;
   //     const { content } = req.body;
+  //     const userId = req.userId; //UserId from middleware
   //     console.log("PUT /messages/:messageId received:", {
   //       messageId,
   //       content,
-  //       userId,
+  //       userId, // Undefined!
   //       body: req.body,
   //       headers: req.headers,
   //     });
@@ -180,7 +185,7 @@ const userController = {
   //     const message = await userService.updateMessage(
   //       messageId,
   //       content,
-  //       userId
+  //       userId // Undefined!
   //     );
   //     res.json(message);
   //   } catch (error) {
@@ -190,6 +195,7 @@ const userController = {
   //       .json({ message: error.message || "Failed to update message" });
   //   }
   // },
+
   async getConversations(req, res) {
     try {
       const { userId, role, tab } = req.query;

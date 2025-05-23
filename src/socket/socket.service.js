@@ -8,9 +8,9 @@ export const initializeSocket = (server) => {
   io = new Server(server, {
     cors: {
       origin: process.env.FRONTEND_URL || "http://localhost:3000",
-      methods: ["GET", "POST"],
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: ["Content-Type", "Authorization", "Cookie", "x-user-id"],
     },
   });
 
@@ -84,6 +84,7 @@ export const initializeSocket = (server) => {
             },
             createdAt: message.createdAt.toISOString(),
             conversationId: String(conversation.id),
+            isEdited: message.isEdited,
           };
 
           const recipientId =
@@ -147,6 +148,7 @@ export const initializeSocket = (server) => {
               ...msg,
               id: String(msg.id),
               sender: { ...msg.sender, id: String(msg.sender.id) },
+              isEdited: msg.isEdited,
             })),
           };
 
@@ -176,6 +178,7 @@ export const initializeSocket = (server) => {
         }
       }
     );
+
     socket.on(
       "message updated",
       async ({ message, to, from, conversationId }) => {
@@ -192,6 +195,7 @@ export const initializeSocket = (server) => {
             id: String(message.id),
             sender: { ...message.sender, id: String(message.sender.id) },
             conversationId: String(convId),
+            isEdited: message.isEdited,
           };
 
           const conversation = await prisma.conversation.findUnique({
@@ -223,6 +227,7 @@ export const initializeSocket = (server) => {
         }
       }
     );
+
     socket.on("conversation opened", async ({ conversationId }) => {
       try {
         if (!conversationId || isNaN(parseInt(conversationId, 10))) {
@@ -265,6 +270,7 @@ export const initializeSocket = (server) => {
             ...msg,
             id: String(msg.id),
             sender: { ...msg.sender, id: String(msg.sender.id) },
+            isEdited: msg.isEdited,
           })),
         };
 

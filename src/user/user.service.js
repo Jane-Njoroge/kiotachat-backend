@@ -3,7 +3,6 @@ import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtp } from "../utils/nodemailer.js";
 import userRepository from "./user.repository.js";
 import prisma from "../prisma.js";
-//import { register } from "module";
 
 const userService = {
   async registerUser({ fullName, email, phoneNumber, password }) {
@@ -90,7 +89,6 @@ const userService = {
       throw new Error("Valid and distinct participant IDs are required");
     }
 
-    // Check if conversation already exists
     const existingConversation = await prisma.conversation.findFirst({
       where: {
         OR: [
@@ -130,6 +128,7 @@ const userService = {
       parsedParticipant2Id
     );
   },
+
   async updateMessage(messageId, content, userId) {
     const parsedMessageId = parseInt(messageId, 10);
     const parsedUserId = parseInt(userId, 10);
@@ -150,7 +149,7 @@ const userService = {
 
     const updatedMessage = await prisma.message.update({
       where: { id: parsedMessageId },
-      data: { content },
+      data: { content, isEdited: true },
       include: {
         sender: {
           select: { id: true, fullName: true, email: true, role: true },
@@ -166,8 +165,10 @@ const userService = {
         id: String(updatedMessage.sender.id),
       },
       conversationId: String(updatedMessage.conversationId),
+      isEdited: updatedMessage.isEdited,
     };
   },
+
   async getConversations(userId, role, tab) {
     try {
       const parsedUserId = parseInt(userId, 10);
@@ -198,6 +199,7 @@ const userService = {
           ...msg,
           id: String(msg.id),
           sender: { ...msg.sender, id: String(msg.sender.id) },
+          isEdited: msg.isEdited,
         })),
       }));
     } catch (error) {
@@ -205,6 +207,7 @@ const userService = {
       throw new Error(error.message || "Failed to fetch conversations");
     }
   },
+
   async searchConversations(query, userId, role) {
     return await userRepository.searchConversations(query, userId, role);
   },
