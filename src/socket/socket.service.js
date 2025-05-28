@@ -15,7 +15,12 @@ export const initializeSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    console.log("New connection:", socket.id);
+    console.log(
+      "New connection:",
+      socket.id,
+      "Headers:",
+      socket.handshake.headers
+    );
     socket.on("register", ({ userId, role }) => {
       if (!userId || isNaN(parseInt(userId, 10))) {
         console.error("Invalid userId during registration:", userId);

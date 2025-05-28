@@ -181,6 +181,16 @@ const userRepository = {
       sender: { ...msg.sender, id: String(msg.sender.id) },
     }));
   },
+  async markConversationAsRead(conversationId) {
+    const parsedConversationId = parseInt(conversationId, 10);
+    if (isNaN(parsedConversationId)) {
+      throw new Error("Valid conversationId is required");
+    }
+    return await prisma.conversation.update({
+      where: { id: parsedConversationId },
+      data: { unread: 0 },
+    });
+  },
 
   async searchUsers(query, excludeUserId, role) {
     let excludeId = parseInt(excludeUserId, 10);
