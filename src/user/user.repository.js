@@ -83,45 +83,6 @@ const userRepository = {
     });
   },
 
-  // async getChatByUserId(userId) {
-  //   const conversations = await prisma.conversation.findMany({
-  //     where: {
-  //       OR: [
-  //         { participant1Id: parseInt(userId, 10) },
-  //         { participant2Id: parseInt(userId, 10) },
-  //       ],
-  //     },
-  //     include: {
-  //       participant1: {
-  //         select: { id: true, fullName: true, email: true, role: true },
-  //       },
-  //       participant2: {
-  //         select: { id: true, fullName: true, email: true, role: true },
-  //       },
-  //       messages: {
-  //         include: {
-  //           sender: {
-  //             select: { id: true, fullName: true, email: true, role: true },
-  //           },
-  //         },
-  //         orderBy: { createdAt: "desc" },
-  //         take: 1,
-  //       },
-  //     },
-  //     orderBy: { updatedAt: "desc" },
-  //   });
-  //   return conversations.map((conv) => ({
-  //     ...conv,
-  //     id: String(conv.id),
-  //     participant1: { ...conv.participant1, id: String(conv.participant1.id) },
-  //     participant2: { ...conv.participant2, id: String(conv.participant2.id) },
-  //     messages: conv.messages.map((msg) => ({
-  //       ...msg,
-  //       id: String(msg.id),
-  //       sender: { ...msg.sender, id: String(msg.sender.id) },
-  //     })),
-  //   }));
-  // },
   async getChatByUserId(userId) {
     const conversations = await prisma.conversation.findMany({
       where: {
@@ -138,6 +99,7 @@ const userRepository = {
           select: { id: true, fullName: true, email: true, role: true },
         },
         messages: {
+          where: { isDeleted: false },
           include: {
             sender: {
               select: { id: true, fullName: true, email: true, role: true },
@@ -161,13 +123,41 @@ const userRepository = {
       })),
     }));
   },
+
+  // async getMessages(conversationId) {
+  //   const parsedConversationId = parseInt(conversationId, 10);
+  //   if (isNaN(parsedConversationId)) {
+  //     throw new Error("Valid conversationId is required");
+  //   }
+  //   const messages = await prisma.message.findMany({
+  //     where: {
+  //       conversationId: parsedConversationId,
+  //       isDeleted: false,
+  //     },
+  //     include: {
+  //       sender: {
+  //         select: { id: true, fullName: true, email: true, role: true },
+  //       },
+  //     },
+  //     orderBy: { createdAt: "asc" },
+  //   });
+  //   return messages.map((msg) => ({
+  //     ...msg,
+  //     id: String(msg.id),
+  //     sender: { ...msg.sender, id: String(msg.sender.id) },
+  //   }));
+  // },
+
   async getMessages(conversationId) {
     const parsedConversationId = parseInt(conversationId, 10);
     if (isNaN(parsedConversationId)) {
       throw new Error("Valid conversationId is required");
     }
     const messages = await prisma.message.findMany({
-      where: { conversationId: parsedConversationId },
+      where: {
+        conversationId: parsedConversationId,
+        isDeleted: false,
+      },
       include: {
         sender: {
           select: { id: true, fullName: true, email: true, role: true },
@@ -181,6 +171,48 @@ const userRepository = {
       sender: { ...msg.sender, id: String(msg.sender.id) },
     }));
   },
+
+  async getChatByUserId(userId) {
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        OR: [
+          { participant1Id: parseInt(userId, 10) },
+          { participant2Id: parseInt(userId, 10) },
+        ],
+      },
+      include: {
+        participant1: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        participant2: {
+          select: { id: true, fullName: true, email: true, role: true },
+        },
+        messages: {
+          where: { isDeleted: false },
+          include: {
+            sender: {
+              select: { id: true, fullName: true, email: true, role: true },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    return conversations.map((conv) => ({
+      ...conv,
+      id: String(conv.id),
+      participant1: { ...conv.participant1, id: String(conv.participant1.id) },
+      participant2: { ...conv.participant2, id: String(conv.participant2.id) },
+      messages: conv.messages.map((msg) => ({
+        ...msg,
+        id: String(msg.id),
+        sender: { ...msg.sender, id: String(msg.sender.id) },
+      })),
+    }));
+  },
+
   async markConversationAsRead(conversationId) {
     const parsedConversationId = parseInt(conversationId, 10);
     if (isNaN(parsedConversationId)) {
