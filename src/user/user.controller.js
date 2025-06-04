@@ -1,7 +1,7 @@
 import { generateOtp } from "../utils/generateOtp.js";
 import userService from "./user.service.js";
 import { getIo, userSocketMap } from "../socket/socket.service.js";
-import prisma from "../prisma.js"; // Add this import
+import prisma from "../prisma.js";
 
 const userController = {
   async register(req, res) {
@@ -235,7 +235,6 @@ const userController = {
                   },
                 },
                 orderBy: { createdAt: "desc" },
-                take: 1,
               },
             },
           });

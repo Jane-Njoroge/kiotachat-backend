@@ -1,3 +1,4 @@
+// import { getIo, userSocketMap } from "../socket/socket.service.js";
 // import bcrypt from "bcrypt";
 // import { generateOtp } from "../utils/generateOtp.js";
 // import { sendOtp } from "../utils/nodemailer.js";
@@ -76,15 +77,28 @@
 //   async getAllUsers(role) {
 //     return await userRepository.getAllUsers(role);
 //   },
-//   //forwarding list should be the admins only
+
+//   // async getAdmins(excludeUserId) {
+//   //   const parsedExcludeUserId = parseInt(excludeUserId, 10);
+//   //   if (isNaN(parsedExcludeUserId)) {
+//   //     throw new Error("Valid excludeUserID is required");
+//   //   }
+//   //   return await userRepository
+//   //     .getAllUsers("ADMIN")
+//   //     .then((users) => users.filter((user) => user.id !== parsedExcludeUserId));
+//   // },
 //   async getAdmins(excludeUserId) {
 //     const parsedExcludeUserId = parseInt(excludeUserId, 10);
 //     if (isNaN(parsedExcludeUserId)) {
-//       throw new Error("Valid excludeUserID is required");
+//       throw new Error("Valid excludeUserId is required");
 //     }
-//     return await userRepository
-//       .getAllUsers("ADMIN")
-//       .then((users) => users.filter((user) => user.id !== parsedExcludeUserId));
+//     const admins = await userRepository.getAllUsers("ADMIN");
+//     return admins
+//       .filter((user) => user.id !== parsedExcludeUserId)
+//       .map((user) => ({
+//         ...user,
+//         id: String(user.id),
+//       }));
 //   },
 //   async createConversation(participant1Id, participant2Id) {
 //     const parsedParticipant1Id = parseInt(participant1Id, 10);
@@ -130,7 +144,25 @@
 //     });
 
 //     if (existingConversation) {
-//       return existingConversation;
+//       return {
+//         ...existingConversation,
+//         id: String(existingConversation.id),
+//         participant1: {
+//           ...existingConversation.participant1,
+//           id: String(existingConversation.participant1.id),
+//         },
+//         participant2: {
+//           ...existingConversation.participant2,
+//           id: String(existingConversation.participant2.id),
+//         },
+//         messages: existingConversation.messages.map((msg) => ({
+//           ...msg,
+//           id: String(msg.id),
+//           sender: { ...msg.sender, id: String(msg.sender.id) },
+//           isEdited: msg.isEdited,
+//           isDeleted: msg.isDeleted,
+//         })),
+//       };
 //     }
 
 //     return await userRepository.createChat(
@@ -139,23 +171,98 @@
 //     );
 //   },
 
+//   // async updateMessage(messageId, content, userId) {
+//   //   const parsedMessageId = parseInt(messageId, 10);
+//   //   const parsedUserId = parseInt(userId, 10);
+//   //   if (isNaN(parsedMessageId) || isNaN(parsedUserId) || !content.trim()) {
+//   //     throw new Error("Valid messageId, userId, and content are required");
+//   //   }
+
+//   //   const message = await prisma.message.findUnique({
+//   //     where: { id: parsedMessageId },
+//   //     include: { sender: true, conversation: true },
+//   //   });
+//   //   if (!message) {
+//   //     throw new Error("Message not found");
+//   //   }
+//   //   if (message.senderId !== parsedUserId) {
+//   //     throw new Error("You can only edit your own messages");
+//   //   }
+
+//   //   const updatedMessage = await prisma.message.update({
+//   //     where: { id: parsedMessageId },
+//   //     data: { content, isEdited: true },
+//   //     include: {
+//   //       sender: {
+//   //         select: { id: true, fullName: true, email: true, role: true },
+//   //       },
+//   //     },
+//   //   });
+
+//   //   const formattedMessage = {
+//   //     ...updatedMessage,
+//   //     id: String(updatedMessage.id),
+//   //     sender: {
+//   //       ...updatedMessage.sender,
+//   //       id: String(updatedMessage.sender.id),
+//   //     },
+//   //     conversationId: String(updatedMessage.conversationId),
+//   //     isEdited: updatedMessage.isEdited,
+//   //     isDeleted: updatedMessage.isDeleted,
+//   //     createdAt: updatedMessage.createdAt.toISOString(),
+//   //   };
+
+//   //   // Emit message updated event
+//   //   const io = getIo();
+//   //   const conversation = await prisma.conversation.findUnique({
+//   //     where: { id: updatedMessage.conversationId },
+//   //     include: { participant1: true, participant2: true },
+//   //   });
+//   //   if (conversation) {
+//   //     const recipientId =
+//   //       parsedUserId === conversation.participant1Id
+//   //         ? conversation.participant2Id
+//   //         : conversation.participant1Id;
+//   //     const recipientSocketId = userSocketMap.get(recipientId);
+//   //     const senderSocketId = userSocketMap.get(parsedUserId);
+
+//   //     if (recipientSocketId) {
+//   //       io.to(recipientSocketId).emit("message updated", formattedMessage);
+//   //     }
+//   //     if (senderSocketId) {
+//   //       io.to(senderSocketId).emit("message updated", formattedMessage);
+//   //     }
+//   //   }
+
+//   //   return formattedMessage;
+//   // },
+
 //   async updateMessage(messageId, content, userId) {
+//     console.log("updateMessage called:", { messageId, content, userId });
+
 //     const parsedMessageId = parseInt(messageId, 10);
 //     const parsedUserId = parseInt(userId, 10);
+
 //     if (isNaN(parsedMessageId) || isNaN(parsedUserId) || !content.trim()) {
 //       throw new Error("Valid messageId, userId, and content are required");
 //     }
 
 //     const message = await prisma.message.findUnique({
 //       where: { id: parsedMessageId },
-//       include: { sender: true },
+//       include: { sender: true, conversation: true },
 //     });
+
 //     if (!message) {
 //       throw new Error("Message not found");
 //     }
-//     if (message.senderId !== parsedUserId) {
-//       throw new Error("You can only edit your own messages");
-//     }
+
+//     const user = await prisma.user.findUnique({ where: { id: parsedUserId } });
+//     const isAdmin = user?.role === "ADMIN";
+
+//     // Allow admins to edit any message
+//     // if (!isAdmin && message.senderId !== parsedUserId) {
+//     //   throw new Error("You can only edit your own messages");
+//     // }
 
 //     const updatedMessage = await prisma.message.update({
 //       where: { id: parsedMessageId },
@@ -167,7 +274,26 @@
 //       },
 //     });
 
-//     return {
+//     // Emit Socket.io event
+//     const io = getIo();
+//     const conversation = await prisma.conversation.findUnique({
+//       where: { id: updatedMessage.conversationId },
+//       include: { participant1: true, participant2: true },
+//     });
+
+//     if (!conversation) {
+//       throw new Error("Conversation not found");
+//     }
+
+//     const recipientId =
+//       parsedUserId === conversation.participant1Id
+//         ? conversation.participant2Id
+//         : conversation.participant1Id;
+
+//     const recipientSocketId = userSocketMap.get(recipientId);
+//     const senderSocketId = userSocketMap.get(parsedUserId);
+
+//     const formattedMessage = {
 //       ...updatedMessage,
 //       id: String(updatedMessage.id),
 //       sender: {
@@ -177,8 +303,25 @@
 //       conversationId: String(updatedMessage.conversationId),
 //       isEdited: updatedMessage.isEdited,
 //       isDeleted: updatedMessage.isDeleted,
+//       createdAt: updatedMessage.createdAt.toISOString(),
 //     };
+
+//     console.log("Emitting message updated:", {
+//       formattedMessage,
+//       recipientSocketId,
+//       senderSocketId,
+//     });
+
+//     if (recipientSocketId) {
+//       io.to(recipientSocketId).emit("message updated", formattedMessage);
+//     }
+//     if (senderSocketId) {
+//       io.to(senderSocketId).emit("message updated", formattedMessage);
+//     }
+
+//     return formattedMessage;
 //   },
+
 //   async forwardMessage(messageId, senderId, recipientIds, content) {
 //     const parsedMessageId = parseInt(messageId, 10);
 //     const parsedSenderId = parseInt(senderId, 10);
@@ -196,8 +339,8 @@
 //     const sender = await prisma.user.findUnique({
 //       where: { id: parsedSenderId },
 //     });
-//     if (!sender || sender.role !== "ADMIN") {
-//       throw new Error("Only admins can forward messages");
+//     if (!sender) {
+//       throw new Error("Sender not found");
 //     }
 
 //     const originalMessage = await prisma.message.findUnique({
@@ -268,9 +411,80 @@
 
 //     return forwardedMessages;
 //   },
+
+//   // async deleteMessage(messageId, userId) {
+//   //   const parsedMessageId = parseInt(messageId, 10);
+//   //   const parsedUserId = parseInt(userId, 10);
+//   //   if (isNaN(parsedMessageId) || isNaN(parsedUserId)) {
+//   //     throw new Error("Valid messageId and userId are required");
+//   //   }
+
+//   //   const message = await prisma.message.findUnique({
+//   //     where: { id: parsedMessageId },
+//   //     include: {
+//   //       sender: true,
+//   //       conversation: {
+//   //         include: { participant1: true, participant2: true },
+//   //       },
+//   //     },
+//   //   });
+//   //   if (!message) {
+//   //     throw new Error("Message not found");
+//   //   }
+
+//   //   const user = await prisma.user.findUnique({ where: { id: parsedUserId } });
+//   //   const isAdmin = user?.role === "ADMIN";
+//   //   const isParticipant =
+//   //     message.conversation.participant1Id === parsedUserId ||
+//   //     message.conversation.participant2Id === parsedUserId;
+
+//   //   if (!isParticipant) {
+//   //     throw new Error("You are not a participant in this conversation");
+//   //   }
+
+//   //   if (!isAdmin && message.senderId !== parsedUserId) {
+//   //     throw new Error("You can only delete your own messages");
+//   //   }
+
+//   //   const updatedMessage = await prisma.message.update({
+//   //     where: { id: parsedMessageId },
+//   //     data: { isDeleted: true },
+//   //     include: {
+//   //       sender: {
+//   //         select: { id: true, fullName: true, email: true, role: true },
+//   //       },
+//   //     },
+//   //   });
+
+//   //   // Emit message deleted event
+//   //   const io = getIo();
+//   //   const deletedMessage = {
+//   //     id: String(updatedMessage.id),
+//   //     conversationId: String(updatedMessage.conversationId),
+//   //     isDeleted: updatedMessage.isDeleted,
+//   //   };
+//   //   const recipientId =
+//   //     parsedUserId === message.conversation.participant1Id
+//   //       ? message.conversation.participant2Id
+//   //       : message.conversation.participant1Id;
+//   //   const recipientSocketId = userSocketMap.get(recipientId);
+//   //   const senderSocketId = userSocketMap.get(parsedUserId);
+
+//   //   if (recipientSocketId) {
+//   //     io.to(recipientSocketId).emit("message deleted", deletedMessage);
+//   //   }
+//   //   if (senderSocketId) {
+//   //     io.to(senderSocketId).emit("message deleted", deletedMessage);
+//   //   }
+
+//   //   return deletedMessage;
+//   // },
 //   async deleteMessage(messageId, userId) {
+//     console.log("deleteMessage called:", { messageId, userId });
+
 //     const parsedMessageId = parseInt(messageId, 10);
 //     const parsedUserId = parseInt(userId, 10);
+
 //     if (isNaN(parsedMessageId) || isNaN(parsedUserId)) {
 //       throw new Error("Valid messageId and userId are required");
 //     }
@@ -284,6 +498,7 @@
 //         },
 //       },
 //     });
+
 //     if (!message) {
 //       throw new Error("Message not found");
 //     }
@@ -298,6 +513,7 @@
 //       throw new Error("You are not a participant in this conversation");
 //     }
 
+//     // Allow admins to delete any message (optional change)
 //     if (!isAdmin && message.senderId !== parsedUserId) {
 //       throw new Error("You can only delete your own messages");
 //     }
@@ -312,13 +528,37 @@
 //       },
 //     });
 
-//     return {
+//     // Emit Socket.io event
+//     const io = getIo();
+//     const deletedMessage = {
 //       id: String(updatedMessage.id),
 //       conversationId: String(updatedMessage.conversationId),
 //       isDeleted: updatedMessage.isDeleted,
 //     };
-//   },
 
+//     const recipientId =
+//       parsedUserId === message.conversation.participant1Id
+//         ? message.conversation.participant2Id
+//         : message.conversation.participant1Id;
+
+//     const recipientSocketId = userSocketMap.get(recipientId);
+//     const senderSocketId = userSocketMap.get(parsedUserId);
+
+//     console.log("Emitting message deleted:", {
+//       deletedMessage,
+//       recipientSocketId,
+//       senderSocketId,
+//     });
+
+//     if (recipientSocketId) {
+//       io.to(recipientSocketId).emit("message deleted", deletedMessage);
+//     }
+//     if (senderSocketId) {
+//       io.to(senderSocketId).emit("message deleted", deletedMessage);
+//     }
+
+//     return deletedMessage;
+//   },
 //   async getConversations(userId, role, tab) {
 //     try {
 //       const parsedUserId = parseInt(userId, 10);
@@ -350,6 +590,7 @@
 //           id: String(msg.id),
 //           sender: { ...msg.sender, id: String(msg.sender.id) },
 //           isEdited: msg.isEdited,
+//           isDeleted: msg.isDeleted,
 //         })),
 //       }));
 //     } catch (error) {
@@ -377,6 +618,7 @@
 
 // export default userService;
 
+import { getIo, userSocketMap } from "../socket/socket.service.js";
 import bcrypt from "bcrypt";
 import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtp } from "../utils/nodemailer.js";
@@ -456,15 +698,6 @@ const userService = {
     return await userRepository.getAllUsers(role);
   },
 
-  // async getAdmins(excludeUserId) {
-  //   const parsedExcludeUserId = parseInt(excludeUserId, 10);
-  //   if (isNaN(parsedExcludeUserId)) {
-  //     throw new Error("Valid excludeUserID is required");
-  //   }
-  //   return await userRepository
-  //     .getAllUsers("ADMIN")
-  //     .then((users) => users.filter((user) => user.id !== parsedExcludeUserId));
-  // },
   async getAdmins(excludeUserId) {
     const parsedExcludeUserId = parseInt(excludeUserId, 10);
     if (isNaN(parsedExcludeUserId)) {
@@ -478,6 +711,7 @@ const userService = {
         id: String(user.id),
       }));
   },
+
   async createConversation(participant1Id, participant2Id) {
     const parsedParticipant1Id = parseInt(participant1Id, 10);
     const parsedParticipant2Id = parseInt(participant2Id, 10);
@@ -539,6 +773,7 @@ const userService = {
           sender: { ...msg.sender, id: String(msg.sender.id) },
           isEdited: msg.isEdited,
           isDeleted: msg.isDeleted,
+          isForwarded: msg.isForwarded || false,
         })),
       };
     }
@@ -549,49 +784,12 @@ const userService = {
     );
   },
 
-  // async updateMessage(messageId, content, userId) {
-  //   const parsedMessageId = parseInt(messageId, 10);
-  //   const parsedUserId = parseInt(userId, 10);
-  //   if (isNaN(parsedMessageId) || isNaN(parsedUserId) || !content.trim()) {
-  //     throw new Error("Valid messageId, userId, and content are required");
-  //   }
-
-  //   const message = await prisma.message.findUnique({
-  //     where: { id: parsedMessageId },
-  //     include: { sender: true },
-  //   });
-  //   if (!message) {
-  //     throw new Error("Message not found");
-  //   }
-  //   if (message.senderId !== parsedUserId) {
-  //     throw new Error("You can only edit your own messages");
-  //   }
-
-  //   const updatedMessage = await prisma.message.update({
-  //     where: { id: parsedMessageId },
-  //     data: { content, isEdited: true },
-  //     include: {
-  //       sender: {
-  //         select: { id: true, fullName: true, email: true, role: true },
-  //       },
-  //     },
-  //   });
-
-  //   return {
-  //     ...updatedMessage,
-  //     id: String(updatedMessage.id),
-  //     sender: {
-  //       ...updatedMessage.sender,
-  //       id: String(updatedMessage.sender.id),
-  //     },
-  //     conversationId: String(updatedMessage.conversationId),
-  //     isEdited: updatedMessage.isEdited,
-  //     isDeleted: updatedMessage.isDeleted,
-  //   };
-  // },
   async updateMessage(messageId, content, userId) {
+    console.log("updateMessage called:", { messageId, content, userId });
+
     const parsedMessageId = parseInt(messageId, 10);
     const parsedUserId = parseInt(userId, 10);
+
     if (isNaN(parsedMessageId) || isNaN(parsedUserId) || !content.trim()) {
       throw new Error("Valid messageId, userId, and content are required");
     }
@@ -600,12 +798,13 @@ const userService = {
       where: { id: parsedMessageId },
       include: { sender: true, conversation: true },
     });
+
     if (!message) {
       throw new Error("Message not found");
     }
-    if (message.senderId !== parsedUserId) {
-      throw new Error("You can only edit your own messages");
-    }
+
+    const user = await prisma.user.findUnique({ where: { id: parsedUserId } });
+    const isAdmin = user?.role === "ADMIN";
 
     const updatedMessage = await prisma.message.update({
       where: { id: parsedMessageId },
@@ -617,6 +816,24 @@ const userService = {
       },
     });
 
+    const io = getIo();
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: updatedMessage.conversationId },
+      include: { participant1: true, participant2: true },
+    });
+
+    if (!conversation) {
+      throw new Error("Conversation not found");
+    }
+
+    const recipientId =
+      parsedUserId === conversation.participant1Id
+        ? conversation.participant2Id
+        : conversation.participant1Id;
+
+    const recipientSocketId = userSocketMap.get(recipientId);
+    const senderSocketId = userSocketMap.get(parsedUserId);
+
     const formattedMessage = {
       ...updatedMessage,
       id: String(updatedMessage.id),
@@ -627,33 +844,26 @@ const userService = {
       conversationId: String(updatedMessage.conversationId),
       isEdited: updatedMessage.isEdited,
       isDeleted: updatedMessage.isDeleted,
+      isForwarded: updatedMessage.isForwarded || false,
       createdAt: updatedMessage.createdAt.toISOString(),
     };
 
-    // Emit message updated event
-    const io = getIo();
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: updatedMessage.conversationId },
-      include: { participant1: true, participant2: true },
+    console.log("Emitting message updated:", {
+      formattedMessage,
+      recipientSocketId,
+      senderSocketId,
     });
-    if (conversation) {
-      const recipientId =
-        parsedUserId === conversation.participant1Id
-          ? conversation.participant2Id
-          : conversation.participant1Id;
-      const recipientSocketId = userSocketMap.get(recipientId);
-      const senderSocketId = userSocketMap.get(parsedUserId);
 
-      if (recipientSocketId) {
-        io.to(recipientSocketId).emit("message updated", formattedMessage);
-      }
-      if (senderSocketId) {
-        io.to(senderSocketId).emit("message updated", formattedMessage);
-      }
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit("message updated", formattedMessage);
+    }
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("message updated", formattedMessage);
     }
 
     return formattedMessage;
   },
+
   async forwardMessage(messageId, senderId, recipientIds, content) {
     const parsedMessageId = parseInt(messageId, 10);
     const parsedSenderId = parseInt(senderId, 10);
@@ -671,8 +881,8 @@ const userService = {
     const sender = await prisma.user.findUnique({
       where: { id: parsedSenderId },
     });
-    if (!sender) {
-      throw new Error("Sender not found");
+    if (!sender || sender.role !== "ADMIN") {
+      throw new Error("Only admins can forward messages");
     }
 
     const originalMessage = await prisma.message.findUnique({
@@ -683,8 +893,19 @@ const userService = {
       throw new Error("Original message not found");
     }
 
+    if (originalMessage.senderId !== parsedSenderId) {
+      throw new Error("You can only forward your own messages");
+    }
+
     const forwardedMessages = [];
     for (const recipientId of recipientIds.map((id) => parseInt(id, 10))) {
+      const recipient = await prisma.user.findUnique({
+        where: { id: recipientId },
+      });
+      if (!recipient || recipient.role !== "ADMIN") {
+        continue; // Skip non-admin recipients
+      }
+
       const existingConversation = await prisma.conversation.findFirst({
         where: {
           OR: [
@@ -719,6 +940,7 @@ const userService = {
           senderId: parsedSenderId,
           conversationId,
           originalMessageId: parsedMessageId,
+          isForwarded: true,
         },
         include: {
           sender: {
@@ -738,65 +960,19 @@ const userService = {
         originalMessageId: String(forwardedMessage.originalMessageId),
         isEdited: forwardedMessage.isEdited,
         isDeleted: forwardedMessage.isDeleted,
+        isForwarded: forwardedMessage.isForwarded,
       });
     }
 
     return forwardedMessages;
   },
 
-  // async deleteMessage(messageId, userId) {
-  //   const parsedMessageId = parseInt(messageId, 10);
-  //   const parsedUserId = parseInt(userId, 10);
-  //   if (isNaN(parsedMessageId) || isNaN(parsedUserId)) {
-  //     throw new Error("Valid messageId and userId are required");
-  //   }
-
-  //   const message = await prisma.message.findUnique({
-  //     where: { id: parsedMessageId },
-  //     include: {
-  //       sender: true,
-  //       conversation: {
-  //         include: { participant1: true, participant2: true },
-  //       },
-  //     },
-  //   });
-  //   if (!message) {
-  //     throw new Error("Message not found");
-  //   }
-
-  //   const user = await prisma.user.findUnique({ where: { id: parsedUserId } });
-  //   const isAdmin = user?.role === "ADMIN";
-  //   const isParticipant =
-  //     message.conversation.participant1Id === parsedUserId ||
-  //     message.conversation.participant2Id === parsedUserId;
-
-  //   if (!isParticipant) {
-  //     throw new Error("You are not a participant in this conversation");
-  //   }
-
-  //   if (!isAdmin && message.senderId !== parsedUserId) {
-  //     throw new Error("You can only delete your own messages");
-  //   }
-
-  //   const updatedMessage = await prisma.message.update({
-  //     where: { id: parsedMessageId },
-  //     data: { isDeleted: true },
-  //     include: {
-  //       sender: {
-  //         select: { id: true, fullName: true, email: true, role: true },
-  //       },
-  //     },
-  //   });
-
-  //   return {
-  //     id: String(updatedMessage.id),
-  //     conversationId: String(updatedMessage.conversationId),
-  //     isDeleted: updatedMessage.isDeleted,
-  //   };
-  // },
   async deleteMessage(messageId, userId) {
+    console.log("deleteMessage called:", { messageId, userId });
+
     const parsedMessageId = parseInt(messageId, 10);
     const parsedUserId = parseInt(userId, 10);
+
     if (isNaN(parsedMessageId) || isNaN(parsedUserId)) {
       throw new Error("Valid messageId and userId are required");
     }
@@ -810,6 +986,7 @@ const userService = {
         },
       },
     });
+
     if (!message) {
       throw new Error("Message not found");
     }
@@ -838,19 +1015,26 @@ const userService = {
       },
     });
 
-    // Emit message deleted event
     const io = getIo();
     const deletedMessage = {
       id: String(updatedMessage.id),
       conversationId: String(updatedMessage.conversationId),
       isDeleted: updatedMessage.isDeleted,
     };
+
     const recipientId =
       parsedUserId === message.conversation.participant1Id
         ? message.conversation.participant2Id
         : message.conversation.participant1Id;
+
     const recipientSocketId = userSocketMap.get(recipientId);
     const senderSocketId = userSocketMap.get(parsedUserId);
+
+    console.log("Emitting message deleted:", {
+      deletedMessage,
+      recipientSocketId,
+      senderSocketId,
+    });
 
     if (recipientSocketId) {
       io.to(recipientSocketId).emit("message deleted", deletedMessage);
@@ -861,6 +1045,7 @@ const userService = {
 
     return deletedMessage;
   },
+
   async getConversations(userId, role, tab) {
     try {
       const parsedUserId = parseInt(userId, 10);
@@ -893,6 +1078,7 @@ const userService = {
           sender: { ...msg.sender, id: String(msg.sender.id) },
           isEdited: msg.isEdited,
           isDeleted: msg.isDeleted,
+          isForwarded: msg.isForwarded || false,
         })),
       }));
     } catch (error) {

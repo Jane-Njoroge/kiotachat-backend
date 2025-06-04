@@ -44,14 +44,16 @@ model Conversation {
 }
 
 model Message {
-  id             Int          @id @default(autoincrement())
-  conversationId Int
-  senderId       Int
-  content        String
-  createdAt      DateTime     @default(now())
-  isEdited       Boolean      @default(false)
-  isDeleted      Boolean      @default(false)
-  messageType    String?      @default("text")
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  sender         User         @relation(fields: [senderId], references: [id])
+  id                Int          @id @default(autoincrement())
+  conversationId    Int
+  senderId          Int
+  content           String
+  createdAt         DateTime     @default(now())
+  isEdited          Boolean      @default(false)
+  isDeleted         Boolean      @default(false)
+  isForwarded       Boolean      @default(false)
+  messageType       String?      @default("text")
+  originalMessageId Int?
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  sender            User         @relation(fields: [senderId], references: [id])
 }
