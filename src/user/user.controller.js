@@ -64,7 +64,7 @@ const userController = {
       const result = await userService.verifyUserOtp(email, otp);
       console.log("OTP verified, setting cookies:", {
         userId: result.userId,
-        role: result.role,
+        role: result.role.toUpperCase(),
       });
       res.cookie("userId", result.userId, {
         httpOnly: true,
@@ -73,14 +73,19 @@ const userController = {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
       });
-      res.cookie("userRole", result.role, {
+      res.cookie("userRole", result.role.toUpperCase(), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
       });
-      res.json(result);
+      res.json({
+        message: "OTP verified successfully",
+        userId: result.userId,
+        role: result.role.toUpperCase(),
+        fullName: result.fullName || email,
+      });
     } catch (error) {
       console.error("OTP verification error:", error);
       res
@@ -101,23 +106,7 @@ const userController = {
         .json({ message: error.message || "Failed to fetch users" });
     }
   },
-  // async getAdmins(req, res) {
-  //   try {
-  //     const { excludeUserId } = req.query;
-  //     if (!excludeUserId || isNaN(parseInt(excludeUserId, 10))) {
-  //       return res
-  //         .status(400)
-  //         .json({ message: "Valid excludeUserId is required" });
-  //     }
-  //     const admins = await userService.getAdmins(excludeq);
-  //     req.json(admins);
-  //   } catch (error) {
-  //     console.error("Get admins error:", error);
-  //     res
-  //       .status(500)
-  //       .json({ message: error.message || "Failed to fetch admins" });
-  //   }
-  // },
+
   async getAdmins(req, res) {
     try {
       const { excludeUserId } = req.query;
