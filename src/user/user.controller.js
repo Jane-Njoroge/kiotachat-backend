@@ -388,61 +388,6 @@ const userController = {
         .json({ message: error.message || "Failed to delete message" });
     }
   },
-  // async deleteMessage(req, res) {
-  //   try {
-  //     const { messageId } = req.params;
-  //     const userId = req.userId;
-  //     console.log("DELETE /messages/:messageId received:", {
-  //       messageId,
-  //       userId,
-  //       headers: req.headers,
-  //       cookies: req.cookies,
-  //     });
-  //     if (!userId || isNaN(parseInt(userId, 10))) {
-  //       console.log("Missing or invalid userId:", { userId });
-  //       return res.status(401).json({ message: "Authentication required" });
-  //     }
-  //     if (!messageId || isNaN(parseInt(messageId, 10))) {
-  //       console.log("Validation failed:", { messageId, userId });
-  //       return res.status(400).json({ message: "Valid messageId is required" });
-  //     }
-  //     const message = await userService.deleteMessage(messageId, userId);
-
-  //     const io = getIo();
-  //     const conversation = await prisma.conversation.findUnique({
-  //       where: { id: parseInt(message.conversationId, 10) },
-  //       include: { participant1: true, participant2: true },
-  //     });
-  //     if (conversation) {
-  //       const recipientId =
-  //         parseInt(userId, 10) === conversation.participant1Id
-  //           ? conversation.participant2Id
-  //           : conversation.participant1Id;
-  //       const recipientSocketId = userSocketMap.get(recipientId);
-  //       const senderSocketId = userSocketMap.get(parseInt(userId, 10));
-
-  //       const deletedMessage = {
-  //         id: String(message.id),
-  //         conversationId: String(message.conversationId),
-  //         isDeleted: message.isDeleted,
-  //       };
-
-  //       if (recipientSocketId) {
-  //         io.to(recipientSocketId).emit("message deleted", deletedMessage);
-  //       }
-  //       if (senderSocketId) {
-  //         io.to(senderSocketId).emit("message deleted", deletedMessage);
-  //       }
-  //     }
-
-  //     res.json({ message: "Message deleted successfully" });
-  //   } catch (error) {
-  //     console.error("Delete message error:", error);
-  //     res
-  //       .status(400)
-  //       .json({ message: error.message || "Failed to delete message" });
-  //   }
-  // },
 
   async getConversations(req, res) {
     try {
@@ -543,18 +488,57 @@ const userController = {
     }
   },
 
+  // async markConversationAsRead(req, res) {
+  //   try {
+  //     const { conversationId } = req.params;
+  //     if (!conversationId || isNaN(parseInt(conversationId, 10))) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Valid conversationId is required" });
+  //     }
+  //     await userService.markConversationAsRead(conversationId);
+  //     res.json({ message: "Conversation marked as read" });
+  //   } catch (error) {
+  //     console.error("Mark conversation as read error:", error);
+  //     res.status(400).json({
+  //       message: error.message || "Failed to mark conversation as read",
+  //     });
+  //   }
+  // },
   async markConversationAsRead(req, res) {
     try {
-      const { conversationId } = req.params;
-      if (!conversationId || isNaN(parseInt(conversationId, 10))) {
-        return res
-          .status(400)
-          .json({ message: "Valid conversationId is required" });
+      const { id } = req.params;
+      console.log("Mark as read request:", {
+        id,
+        type: typeof id,
+        body: req.body,
+        headers: req.headers,
+      });
+      if (!id) throw new Error("Conversation ID is required");
+      const conversationId = parseInt(id, 10);
+      if (isNaN(conversationId)) throw new Error("Invalid conversationId");
+      const userId = parseInt(
+        req.userId || req.body.userId || req.headers["x-user-id"],
+        10
+      );
+      if (isNaN(userId)) throw new Error("Invalid userId");
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+      });
+      if (!conversation) throw new Error("Conversation not found");
+      if (
+        conversation.participant1Id !== userId &&
+        conversation.participant2Id !== userId
+      ) {
+        throw new Error("Unauthorized to mark this conversation as read");
       }
-      await userService.markConversationAsRead(conversationId);
-      res.json({ message: "Conversation marked as read" });
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { unread: 0 },
+      });
+      res.status(200).json({ message: "Conversation marked as read" });
     } catch (error) {
-      console.error("Mark conversation as read error:", error);
+      console.error("Error marking conversation as read:", error);
       res.status(400).json({
         message: error.message || "Failed to mark conversation as read",
       });
