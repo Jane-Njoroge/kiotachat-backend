@@ -111,9 +111,25 @@ app.get("/search/conversations", userController.searchConversations);
 app.get("/search/users", userController.searchUsers);
 app.post("/conversations/:id/read", userController.markConversationAsRead);
 
-app.use((req, res) => {
-  console.log(`Route not found: ${req.method} ${req.url}`);
-  res.status(404).json({ message: "Route not found" });
+// app.use((req, res) => {
+//   console.log(`Route not found: ${req.method} ${req.url}`);
+//   res.status(404).json({ message: "Route not found" });
+// });
+app.use((req, res, next) => {
+  console.log(
+    `Request: ${req.method} ${req.url}, Origin: ${req.headers.origin}, Headers:`,
+    req.headers,
+    `Cookies:`,
+    req.cookies
+  );
+  next();
+});
+app.options("*", (req, res) => {
+  console.log(
+    `CORS Preflight: ${req.method} ${req.url}, Origin: ${req.headers.origin}, Headers:`,
+    req.headers
+  );
+  res.status(200).end();
 });
 
 const port = process.env.PORT || 5002;
