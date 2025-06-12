@@ -4,21 +4,21 @@ import { generateOtp } from "../utils/generateOtp.js";
 import { sendOtp } from "../utils/nodemailer.js";
 import userRepository from "./user.repository.js";
 import prisma from "../prisma.js";
-
 const userService = {
   async registerUser({ fullName, email, phoneNumber, password }) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new Error("Invalid email format");
+      throw new Error("We need a valid email address.");
     }
-    if (!/^\+?\d{10,15}$/.test(phoneNumber)) {
-      throw new Error("Invalid phone number format");
+    if (!/^\+?\d{4,15}$/.test(phoneNumber)) {
+      throw new Error("Your phone number needs to be 4-15 digits.");
     }
-    if (password.length < 8) {
-      throw new Error("Password must be at least 8 characters");
+    if (!password || /\s/.test(password)) {
+      throw new Error("Your password can’t be empty or have spaces.");
     }
 
     const existingUser = await userRepository.findUserByEmail(email);
-    if (existingUser) throw new Error("User already exists. Please login");
+    if (existingUser)
+      throw new Error("This email’s already taken. Please login.");
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await userRepository.createUser({
@@ -28,19 +28,20 @@ const userService = {
       password: hashedPassword,
     });
 
-    return { message: "Registration successful", userId: user.id };
+    return { message: "Account created successfully!", userId: user.id };
   },
 
   async loginUser(email, password) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new Error("Invalid email format");
+      throw new Error("We need a valid email address.");
     }
 
     const user = await userRepository.findUserByEmail(email);
-    if (!user) throw new Error("Invalid credentials");
+    if (!user)
+      throw new Error("No account found with this email. Please sign up.");
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) throw new Error("Invalid credentials");
+    if (!isMatch) throw new Error("Incorrect password. Please try again.");
 
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -48,7 +49,7 @@ const userService = {
     await userRepository.saveOtp(user.id, otp, expiresAt);
     await sendOtp(email, otp);
 
-    return { message: "proceed to OTP entry" };
+    return { message: "OTP sent to your email. Check your inbox!" };
   },
 
   async generateUserOtp(email) {
