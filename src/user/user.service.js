@@ -65,34 +65,60 @@ const userService = {
     return { message: "OTP sent successfully" };
   },
 
-  async verifyUserOtp(email, otp) {
-    const user = await userRepository.findUserByEmail(email);
-    if (!user) throw new Error("User not found");
-    console.log("verifying OTP for user:", {
-      userId: user.id,
-      role: user.role,
-      fullName: user.fullName,
+  // async verifyUserOtp(email, otp) {
+  //   const user = await userRepository.findUserByEmail(email);
+  //   if (!user) throw new Error("User not found");
+  //   console.log("verifying OTP for user:", {
+  //     userId: user.id,
+  //     role: user.role,
+  //     fullName: user.fullName,
+  //   });
+
+  //   const latestOtp = await userRepository.findLatestOtp(user.id);
+  //   if (!latestOtp || latestOtp.otp !== otp) throw new Error("Invalid OTP");
+  //   if (new Date() > latestOtp.expiresAt) {
+  //     await userRepository.deleteOtp(latestOtp.id);
+  //     throw new Error("OTP has expired");
+  //   }
+
+  //   await userRepository.deleteOtp(latestOtp.id);
+
+  //   return {
+  //     message: "OTP verified successfully",
+  //     role: user.role,
+  //     userId: user.id,
+  //     fullName: user.fullName,
+  //   };
+  // },
+
+  async verifyOtp(otp) {
+    const otpRecord = await prisma.otp.findFirst({
+      where: {
+        otp,
+        expiresAt: { gt: new Date() },
+      },
+      include: { user: true },
     });
 
-    const latestOtp = await userRepository.findLatestOtp(user.id);
-    if (!latestOtp || latestOtp.otp !== otp) throw new Error("Invalid OTP");
-    if (new Date() > latestOtp.expiresAt) {
-      await userRepository.deleteOtp(latestOtp.id);
-      throw new Error("OTP has expired");
+    if (!otpRecord) {
+      throw new Error("Invalid or expired OTP.");
     }
 
-    await userRepository.deleteOtp(latestOtp.id);
+    console.log("OTP verified for user:", {
+      userId: otpRecord.userId,
+      role: otpRecord.user.role,
+      fullName: otpRecord.user.fullName,
+    });
+
+    await prisma.otp.deleteMany({
+      where: { userId: otpRecord.userId },
+    });
 
     return {
-      message: "OTP verified successfully",
-      role: user.role,
-      userId: user.id,
-      fullName: user.fullName,
+      id: otpRecord.userId,
+      role: otpRecord.user.role.toUpperCase(), // Ensure uppercase
+      fullName: otpRecord.user.fullName,
     };
-  },
-
-  async getAllUsers(role) {
-    return await userRepository.getAllUsers(role);
   },
 
   async getAdmins(excludeUserId) {

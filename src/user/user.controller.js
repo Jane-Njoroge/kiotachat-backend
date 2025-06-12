@@ -55,41 +55,40 @@ const userController = {
     }
   },
   async verifyOtp(req, res) {
+    const { email, otp } = req.body;
     try {
-      const { email, otp } = req.body;
-      if (!email || !otp) {
-        return res.status(400).json({ message: "Email and OTP are required" });
+      // Validate OTP (e.g., check against stored OTP in database)
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
-      const result = await userService.verifyUserOtp(email, otp);
-      console.log("OTP verified, setting cookies:", {
-        userId: result.userId,
-        role: result.role.toUpperCase(),
-      });
-      res.cookie("userId", result.userId, {
+      if (user.otp !== otp) {
+        return res.status(400).json({ message: "Invalid OTP" });
+      }
+
+      // Clear OTP after verification
+      await prisma.user.update({ where: { email }, data: { otp: null } });
+
+      // Set cookies
+      res.cookie("userId", user.id.toString(), {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
+        secure: true,
+        sameSite: "strict",
       });
-      res.cookie("userRole", result.role.toUpperCase(), {
+      res.cookie("userRole", user.role, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "none",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: "/",
+        secure: true,
+        sameSite: "strict",
       });
+
       res.json({
         message: "OTP verified successfully",
-        userId: result.userId,
-        role: result.role.toUpperCase(),
-        fullName: result.fullName || email,
+        fullName: user.fullName,
+        role: user.role, // Ensure this is "ADMIN" or "USER"
       });
     } catch (error) {
       console.error("OTP verification error:", error);
-      res
-        .status(400)
-        .json({ message: error.message || "OTP verification failed" });
+      res.status(500).json({ message: "Server error" });
     }
   },
   async getUsers(req, res) {
