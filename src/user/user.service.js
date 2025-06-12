@@ -7,6 +7,16 @@ import prisma from "../prisma.js";
 
 const userService = {
   async registerUser({ fullName, email, phoneNumber, password }) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Invalid email format");
+    }
+    if (!/^\+?\d{10,15}$/.test(phoneNumber)) {
+      throw new Error("Invalid phone number format");
+    }
+    if (password.length < 8) {
+      throw new Error("Password must be at least 8 characters");
+    }
+
     const existingUser = await userRepository.findUserByEmail(email);
     if (existingUser) throw new Error("User already exists. Please login");
 
@@ -22,6 +32,10 @@ const userService = {
   },
 
   async loginUser(email, password) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("Invalid email format");
+    }
+
     const user = await userRepository.findUserByEmail(email);
     if (!user) throw new Error("Invalid credentials");
 

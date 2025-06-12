@@ -54,7 +54,6 @@ const userController = {
         .json({ message: error.message || "Failed to generate OTP" });
     }
   },
-
   async verifyOtp(req, res) {
     try {
       const { email, otp } = req.body;
@@ -69,14 +68,14 @@ const userController = {
       res.cookie("userId", result.userId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
       });
       res.cookie("userRole", result.role.toUpperCase(), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: "/",
       });
@@ -93,7 +92,6 @@ const userController = {
         .json({ message: error.message || "OTP verification failed" });
     }
   },
-
   async getUsers(req, res) {
     try {
       const { role } = req.query;
