@@ -54,41 +54,47 @@ const userController = {
         .json({ message: error.message || "Failed to generate OTP" });
     }
   },
+
   async verifyOtp(req, res) {
     const { email, otp } = req.body;
     try {
-      // Validate OTP (e.g., check against stored OTP in database)
+      console.log("Verify OTP request:", { email, otp }); // Debug log
+      if (!email || !otp) {
+        return res.status(400).json({ message: "Email and OTP are required" });
+      }
+
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user) {
+        console.log("User not found for email:", email);
         return res.status(404).json({ message: "User not found" });
       }
-      if (user.otp !== otp) {
-        return res.status(400).json({ message: "Invalid OTP" });
-      }
 
-      // Clear OTP after verification
-      await prisma.user.update({ where: { email }, data: { otp: null } });
+      const result = await userService.verifyUserOtp(email, otp); // Use service
 
       // Set cookies
-      res.cookie("userId", user.id.toString(), {
+      res.cookie("userId", result.userId.toString(), {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
+        path: "/",
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
-      res.cookie("userRole", user.role, {
+      res.cookie("userRole", result.role, {
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
+        path: "/",
+        maxAge: 24 * 60 * 60 * 1000,
       });
 
       res.json({
         message: "OTP verified successfully",
-        fullName: user.fullName,
-        role: user.role, // Ensure this is "ADMIN" or "USER"
+        fullName: result.fullName,
+        role: result.role,
       });
     } catch (error) {
       console.error("OTP verification error:", error);
-      res.status(500).json({ message: "Server error" });
+      res.status(400).json({ message: error.message || "Invalid OTP" });
     }
   },
   async getUsers(req, res) {

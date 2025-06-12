@@ -91,33 +91,33 @@ const userService = {
   //   };
   // },
 
-  async verifyOtp(otp) {
-    const otpRecord = await prisma.otp.findFirst({
-      where: {
-        otp,
-        expiresAt: { gt: new Date() },
-      },
-      include: { user: true },
+  async verifyUserOtp(email, otp) {
+    const user = await userRepository.findUserByEmail(email);
+    if (!user) throw new Error("User not found");
+    console.log("Verifying OTP for user:", {
+      userId: user.id,
+      role: user.role,
+      fullName: user.fullName,
     });
 
-    if (!otpRecord) {
-      throw new Error("Invalid or expired OTP.");
+    const latestOtp = await userRepository.findLatestOtp(user.id);
+    if (!latestOtp || latestOtp.otp !== otp) {
+      console.log("OTP mismatch:", { provided: otp, stored: latestOtp?.otp });
+      throw new Error("Invalid OTP");
+    }
+    if (new Date() > latestOtp.expiresAt) {
+      await userRepository.deleteOtp(latestOtp.id);
+      console.log("OTP expired:", { expiresAt: latestOtp.expiresAt });
+      throw new Error("OTP has expired");
     }
 
-    console.log("OTP verified for user:", {
-      userId: otpRecord.userId,
-      role: otpRecord.user.role,
-      fullName: otpRecord.user.fullName,
-    });
-
-    await prisma.otp.deleteMany({
-      where: { userId: otpRecord.userId },
-    });
+    await userRepository.deleteOtp(latestOtp.id);
 
     return {
-      id: otpRecord.userId,
-      role: otpRecord.user.role.toUpperCase(), // Ensure uppercase
-      fullName: otpRecord.user.fullName,
+      message: "OTP verified successfully",
+      role: user.role.toUpperCase(),
+      userId: user.id,
+      fullName: user.fullName,
     };
   },
 
