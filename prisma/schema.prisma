@@ -1,3 +1,63 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// model User {
+//   id                Int            @id @default(autoincrement())
+//   fullName          String
+//   email             String         @unique
+//   phoneNumber       String?
+//   password          String
+//   createdAt         DateTime       @default(now())
+//   updatedAt         DateTime       @updatedAt
+//   role              String         @default("USER")
+//   otps              OTP[]
+//   participant1Chats Conversation[] @relation("Participant1Chats")
+//   participant2Chats Conversation[] @relation("Participant2Chats")
+//   messages          Message[]
+// }
+
+// model OTP {
+//   id        Int      @id @default(autoincrement())
+//   userId    Int
+//   otp       String
+//   createdAt DateTime @default(now())
+//   expiresAt DateTime
+//   user      User     @relation(fields: [userId], references: [id])
+// }
+
+// model Conversation {
+//   id             Int       @id @default(autoincrement())
+//   participant1Id Int
+//   participant2Id Int
+//   participant1   User      @relation("Participant1Chats", fields: [participant1Id], references: [id])
+//   participant2   User      @relation("Participant2Chats", fields: [participant2Id], references: [id])
+//   messages       Message[]
+//   unread         Int
+//   createdAt      DateTime  @default(now())
+//   updatedAt      DateTime  @updatedAt
+// }
+
+// model Message {
+//   id                Int          @id @default(autoincrement())
+//   conversationId    Int
+//   senderId          Int
+//   content           String
+//   createdAt         DateTime     @default(now())
+//   isEdited          Boolean      @default(false)
+//   isDeleted         Boolean      @default(false)
+//   isForwarded       Boolean      @default(false)
+//   messageType       String?      @default("text")
+//   originalMessageId Int?
+//   conversation      Conversation @relation(fields: [conversationId], references: [id])
+//   sender            User         @relation(fields: [senderId], references: [id])
+// }
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -52,7 +112,11 @@ model Message {
   isEdited          Boolean      @default(false)
   isDeleted         Boolean      @default(false)
   isForwarded       Boolean      @default(false)
-  messageType       String?      @default("text")
+  messageType       String       @default("text")
+  fileUrl           String?
+  fileType          String?
+  fileSize          Int?
+  fileName          String?
   originalMessageId Int?
   conversation      Conversation @relation(fields: [conversationId], references: [id])
   sender            User         @relation(fields: [senderId], references: [id])
