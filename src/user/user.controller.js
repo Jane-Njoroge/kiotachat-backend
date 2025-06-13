@@ -54,24 +54,40 @@
 //         .json({ message: error.message || "Failed to generate OTP" });
 //     }
 //   },
-
 //   async verifyOtp(req, res) {
 //     const { email, otp } = req.body;
 //     try {
-//       console.log("Verify OTP request:", { email, otp }); // Debug log
+//       console.log("Verify OTP request:", {
+//         email,
+//         otp,
+//         cookies: req.cookies,
+//         headers: req.headers,
+//       });
 //       if (!email || !otp) {
 //         return res.status(400).json({ message: "Email and OTP are required" });
 //       }
-
 //       const user = await prisma.user.findUnique({ where: { email } });
 //       if (!user) {
 //         console.log("User not found for email:", email);
 //         return res.status(404).json({ message: "User not found" });
 //       }
+//       console.log("Found user:", { userId: user.id, role: user.role });
+//       const result = await userService.verifyUserOtp(email, otp);
 
-//       const result = await userService.verifyUserOtp(email, otp); // Use service
+//       // Clear existing cookies before setting new ones
+//       res.clearCookie("userId", {
+//         httpOnly: true,
+//         secure: process.env.NODE_ENV === "production",
+//         sameSite: "strict",
+//         path: "/",
+//       });
+//       res.clearCookie("userRole", {
+//         httpOnly: true,
+//         secure: process.env.NODE_ENV === "production",
+//         sameSite: "strict",
+//         path: "/",
+//       });
 
-//       //set cookies
 //       res.cookie("userId", result.userId.toString(), {
 //         httpOnly: true,
 //         secure: process.env.NODE_ENV === "production",
@@ -86,17 +102,116 @@
 //         path: "/",
 //         maxAge: 24 * 60 * 60 * 1000,
 //       });
-
+//       console.log("Cookies set:", {
+//         userId: result.userId,
+//         userRole: result.role,
+//       });
 //       res.json({
 //         message: "OTP verified successfully",
 //         fullName: result.fullName,
 //         role: result.role,
 //       });
 //     } catch (error) {
-//       console.error("OTP verification error:", error);
+//       console.error("OTP verification error:", {
+//         message: error.message,
+//         stack: error.stack,
+//         email,
+//         otp,
+//       });
 //       res.status(400).json({ message: error.message || "Invalid OTP" });
 //     }
 //   },
+
+//   // async verifyOtp(req, res) {
+//   //   const { email, otp } = req.body;
+//   //   try {
+//   //     console.log("Verify OTP request:", { email, otp }); // Debug log
+//   //     if (!email || !otp) {
+//   //       return res.status(400).json({ message: "Email and OTP are required" });
+//   //     }
+
+//   //     const user = await prisma.user.findUnique({ where: { email } });
+//   //     if (!user) {
+//   //       console.log("User not found for email:", email);
+//   //       return res.status(404).json({ message: "User not found" });
+//   //     }
+
+//   //     const result = await userService.verifyUserOtp(email, otp); // Use service
+
+//   //     //set cookies
+//   //     res.cookie("userId", result.userId.toString(), {
+//   //       httpOnly: true,
+//   //       secure: process.env.NODE_ENV === "production",
+//   //       sameSite: "strict",
+//   //       path: "/",
+//   //       maxAge: 24 * 60 * 60 * 1000, // 1 day
+//   //     });
+//   //     res.cookie("userRole", result.role, {
+//   //       httpOnly: true,
+//   //       secure: process.env.NODE_ENV === "production",
+//   //       sameSite: "strict",
+//   //       path: "/",
+//   //       maxAge: 24 * 60 * 60 * 1000,
+//   //     });
+
+//   //     res.json({
+//   //       message: "OTP verified successfully",
+//   //       fullName: result.fullName,
+//   //       role: result.role,
+//   //     });
+//   //   } catch (error) {
+//   //     console.error("OTP verification error:", error);
+//   //     res.status(400).json({ message: error.message || "Invalid OTP" });
+//   //   }
+//   // },
+
+//   async uploadFile(req, res) {
+//     try {
+//       const userId = parseInt(
+//         req.cookies.userId || req.headers["x-user-id"],
+//         10
+//       );
+//       if (!userId || isNaN(userId)) {
+//         return res.status(401).json({ message: "Authentication required" });
+//       }
+//       if (!req.file) {
+//         return res.status(400).json({ message: "No file uploaded" });
+//       }
+//       const { to, conversationId } = req.body;
+//       const toId = parseInt(to, 10);
+//       const convId = conversationId ? parseInt(conversationId, 10) : undefined;
+
+//       if (!toId || isNaN(toId)) {
+//         return res.status(400).json({ message: "Recipient ID is required" });
+//       }
+
+//       const fileUrl = `/uploads/${req.file.filename}`;
+//       const fileType = req.file.mimetype;
+//       const fileSize = req.file.size;
+//       const fileName = req.file.originalname;
+
+//       const message = await userService.sendFileMessage({
+//         userId,
+//         toId,
+//         conversationId: convId,
+//         fileUrl,
+//         fileType,
+//         fileSize,
+//         fileName,
+//       });
+
+//       res.status(201).json({
+//         message: "File uploaded successfully",
+//         data: message,
+//       });
+//     } catch (error) {
+//       console.error("File upload error:", error);
+//       res
+//         .status(400)
+//         .json({ message: error.message || "Failed to upload file" });
+//     }
+//   },
+
 //   async getUsers(req, res) {
 //     try {
 //       const { role } = req.query;
@@ -491,23 +606,6 @@
 //     }
 //   },
 
-//   // async markConversationAsRead(req, res) {
-//   //   try {
-//   //     const { conversationId } = req.params;
-//   //     if (!conversationId || isNaN(parseInt(conversationId, 10))) {
-//   //       return res
-//   //         .status(400)
-//   //         .json({ message: "Valid conversationId is required" });
-//   //     }
-//   //     await userService.markConversationAsRead(conversationId);
-//   //     res.json({ message: "Conversation marked as read" });
-//   //   } catch (error) {
-//   //     console.error("Mark conversation as read error:", error);
-//   //     res.status(400).json({
-//   //       message: error.message || "Failed to mark conversation as read",
-//   //     });
-//   //   }
-//   // },
 //   async markConversationAsRead(req, res) {
 //     try {
 //       const { id } = req.params;
@@ -607,6 +705,7 @@ const userController = {
         .json({ message: error.message || "Failed to generate OTP" });
     }
   },
+
   async verifyOtp(req, res) {
     const { email, otp } = req.body;
     try {
@@ -631,27 +730,27 @@ const userController = {
       res.clearCookie("userId", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "none",
         path: "/",
       });
       res.clearCookie("userRole", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "none",
         path: "/",
       });
 
       res.cookie("userId", result.userId.toString(), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "none",
         path: "/",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
       res.cookie("userRole", result.role, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        sameSite: "none",
         path: "/",
         maxAge: 24 * 60 * 60 * 1000,
       });
@@ -661,8 +760,10 @@ const userController = {
       });
       res.json({
         message: "OTP verified successfully",
+        userId: String(result.userId),
         fullName: result.fullName,
         role: result.role,
+        email: user.email,
       });
     } catch (error) {
       console.error("OTP verification error:", {
@@ -674,49 +775,6 @@ const userController = {
       res.status(400).json({ message: error.message || "Invalid OTP" });
     }
   },
-
-  // async verifyOtp(req, res) {
-  //   const { email, otp } = req.body;
-  //   try {
-  //     console.log("Verify OTP request:", { email, otp }); // Debug log
-  //     if (!email || !otp) {
-  //       return res.status(400).json({ message: "Email and OTP are required" });
-  //     }
-
-  //     const user = await prisma.user.findUnique({ where: { email } });
-  //     if (!user) {
-  //       console.log("User not found for email:", email);
-  //       return res.status(404).json({ message: "User not found" });
-  //     }
-
-  //     const result = await userService.verifyUserOtp(email, otp); // Use service
-
-  //     //set cookies
-  //     res.cookie("userId", result.userId.toString(), {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === "production",
-  //       sameSite: "strict",
-  //       path: "/",
-  //       maxAge: 24 * 60 * 60 * 1000, // 1 day
-  //     });
-  //     res.cookie("userRole", result.role, {
-  //       httpOnly: true,
-  //       secure: process.env.NODE_ENV === "production",
-  //       sameSite: "strict",
-  //       path: "/",
-  //       maxAge: 24 * 60 * 60 * 1000,
-  //     });
-
-  //     res.json({
-  //       message: "OTP verified successfully",
-  //       fullName: result.fullName,
-  //       role: result.role,
-  //     });
-  //   } catch (error) {
-  //     console.error("OTP verification error:", error);
-  //     res.status(400).json({ message: error.message || "Invalid OTP" });
-  //   }
-  // },
 
   async uploadFile(req, res) {
     try {
@@ -795,6 +853,7 @@ const userController = {
         .json({ message: error.message || "Failed to fetch admins" });
     }
   },
+
   async createConversation(req, res) {
     try {
       const { participant1Id, participant2Id } = req.body;
@@ -827,6 +886,7 @@ const userController = {
         .json({ message: error.message || "Failed to create conversation" });
     }
   },
+
   async forwardMessage(req, res) {
     try {
       const { messageId, recipientIds, content } = req.body;
@@ -945,6 +1005,7 @@ const userController = {
         .json({ message: error.message || "Failed to forward message" });
     }
   },
+
   async updateMessage(req, res) {
     try {
       const { messageId } = req.params;
