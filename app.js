@@ -47,12 +47,12 @@
 // app.use(cookieParser());
 
 // // Serve static files from the uploads directory
-// app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// app.use("/uploads", express.static(path.join(__dirname, "Uploads")));
 
 // // Configure multer for file uploads
 // const storage = multer.diskStorage({
 //   destination: (req, file, cb) => {
-//     cb(null, path.join(__dirname, "uploads"));
+//     cb(null, path.join(__dirname, "Uploads"));
 //   },
 //   filename: (req, file, cb) => {
 //     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -108,54 +108,40 @@
 //   res.json({ message: "Cookies cleared" });
 // });
 
-// // app.get("/me", async (req, res) => {
-// //   const userId = parseInt(req.cookies.userId, 10);
-// //   if (!userId || isNaN(userId)) {
-// //     return res.status(401).json({ message: "Authentication required" });
-// //   }
-// //   try {
-// //     const user = await prisma.user.findUnique({
-// //       where: { id: userId },
-// //       select: { id: true, role: true, fullName: true },
-// //     });
-// //     if (!user) {
-// //       return res.status(401).json({ message: "User not found" });
-// //     }
-// //     res.json({
-// //       userId: String(user.id),
-// //       role: user.role.toUpperCase(),
-// //       fullName: user.fullName,
-// //     });
-// //   } catch (error) {
-// //     console.error("Get user error:", error);
-// //     res.status(500).json({ message: "Failed to fetch user" });
-// //   }
-// // });
 // app.get("/me", async (req, res) => {
-//   const userId = parseInt(req.cookies.userId, 10);
-//   console.log("/me request:", {
-//     userId,
+//   console.log("/me request received:", {
 //     cookies: req.cookies,
 //     headers: req.headers,
+//     origin: req.headers.origin,
 //   });
+
+//   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
 //   if (!userId || isNaN(userId)) {
-//     console.log("/me: Authentication required, no valid userId");
+//     console.log("/me: Invalid or missing userId", {
+//       userId,
+//       cookies: req.cookies,
+//     });
 //     return res.status(401).json({ message: "Authentication required" });
 //   }
+
 //   try {
 //     const user = await prisma.user.findUnique({
 //       where: { id: userId },
 //       select: { id: true, role: true, fullName: true, email: true },
 //     });
+
 //     if (!user) {
-//       console.log("/me: User not found for userId:", userId);
-//       return res.status(401).json({ message: "User not found" });
+//       console.log("/me: User not found", { userId });
+//       return res.status(404).json({ message: "User not found" });
 //     }
-//     console.log("/me: User fetched:", {
+
+//     console.log("/me: User fetched successfully", {
 //       userId: user.id,
 //       role: user.role,
 //       fullName: user.fullName,
+//       email: user.email,
 //     });
+
 //     res.json({
 //       userId: String(user.id),
 //       role: user.role.toUpperCase(),
@@ -163,12 +149,12 @@
 //       email: user.email,
 //     });
 //   } catch (error) {
-//     console.error("/me error:", {
-//       message: error.message,
-//       stack: error.stack,
+//     console.error("/me: Error fetching user", {
 //       userId,
+//       error: error.message,
+//       stack: error.stack,
 //     });
-//     res.status(500).json({ message: "Failed to fetch user" });
+//     res.status(500).json({ message: "Failed to fetch user data" });
 //   }
 // });
 
@@ -240,7 +226,7 @@ import userController from "./src/user/user.controller.js";
 import { initializeSocket } from "./src/socket/socket.service.js";
 import cookieParser from "cookie-parser";
 import http from "http";
-import prisma from "./src/prisma.js";
+import prisma from "./src/prima.js";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -263,10 +249,12 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
+      console.log(`CORS origin check: ${origin}`);
       if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+        callback(null, origin || "*");
       } else {
-        callback(new Error("Not allowed by CORS"));
+        console.error(`CORS rejected: ${origin}`);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -397,8 +385,9 @@ app.get("/conversations", userController.getConversations);
 app.post("/conversations", userController.createConversation);
 app.get("/messages", userController.getMessages);
 
-// File upload route
+// File upload routes
 app.post("/upload-file", upload.single("file"), userController.uploadFile);
+app.post("/messages/upload", upload.single("file"), userController.uploadFile);
 
 const authenticate = async (req, res, next) => {
   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
