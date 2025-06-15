@@ -5,7 +5,7 @@ import userController from "./src/user/user.controller.js";
 import { initializeSocket } from "./src/socket/socket.service.js";
 import cookieParser from "cookie-parser";
 import http from "http";
-import prisma from "./prisma.js";
+import prisma from "./src/prisma.js";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
