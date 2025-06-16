@@ -28,16 +28,18 @@
 // app.use(
 //   cors({
 //     origin: (origin, callback) => {
+//       console.log(`CORS check for origin: ${origin}`);
 //       if (!origin || allowedOrigins.includes(origin)) {
-//         callback(null, true);
+//         callback(null, origin || "https://kiotachat-frontend.vercel.app");
 //       } else {
-//         callback(new Error("Not allowed by CORS"));
+//         console.error(`CORS rejected: ${origin}`);
+//         callback(new Error(`Origin ${origin} not allowed by CORS`));
 //       }
 //     },
 //     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 //     credentials: true,
 //     allowedHeaders: ["Content-Type", "Authorization", "Cookie", "x-user-id"],
-//     exposedHeaders: ["Set-Cookie"],
+//     exposedHeaders: ["Set-Cookie", "x-user-id"],
 //   })
 // );
 
@@ -46,10 +48,8 @@
 // app.use(express.urlencoded({ extended: true }));
 // app.use(cookieParser());
 
-// // Serve static files from the uploads directory
-// app.use("/uploads", express.static(path.join(__dirname, "Uploads")));
+// app.use("/Uploads", express.static(path.join(__dirname, "Uploads")));
 
-// // Configure multer for file uploads
 // const storage = multer.diskStorage({
 //   destination: (req, file, cb) => {
 //     cb(null, path.join(__dirname, "Uploads"));
@@ -62,7 +62,7 @@
 
 // const upload = multer({
 //   storage,
-//   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+//   limits: { fileSize: 10 * 1024 * 1024 },
 //   fileFilter: (req, file, cb) => {
 //     const allowedTypes = [
 //       "image/jpeg",
@@ -95,13 +95,13 @@
 // app.post("/clear-cookies", (req, res) => {
 //   res.clearCookie("userId", {
 //     httpOnly: true,
-//     secure: process.env.NODE_ENV === "production",
+//     secure: true,
 //     sameSite: "none",
 //     path: "/",
 //   });
 //   res.clearCookie("userRole", {
 //     httpOnly: true,
-//     secure: process.env.NODE_ENV === "production",
+//     secure: true,
 //     sameSite: "none",
 //     path: "/",
 //   });
@@ -115,7 +115,7 @@
 //     origin: req.headers.origin,
 //   });
 
-//   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
+//   const userId = parseInt(req.cookies.userId, 10);
 //   if (!userId || isNaN(userId)) {
 //     console.log("/me: Invalid or missing userId", {
 //       userId,
@@ -162,9 +162,9 @@
 // app.post("/conversations", userController.createConversation);
 // app.get("/messages", userController.getMessages);
 
-// // File upload route
 // app.post("/upload-file", upload.single("file"), userController.uploadFile);
 // app.post("/messages/upload", upload.single("file"), userController.uploadFile);
+
 // const authenticate = async (req, res, next) => {
 //   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
 //   if (!userId || isNaN(userId)) {
@@ -230,11 +230,19 @@ import prisma from "./src/prisma.js";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs"; // Added for directory creation
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Create Uploads directory if it doesn't exist
+const uploadDir = path.join(__dirname, "Uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log("Created Uploads directory:", uploadDir);
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -271,6 +279,22 @@ app.use(cookieParser());
 
 app.use("/Uploads", express.static(path.join(__dirname, "Uploads")));
 
+// Multer error handling middleware
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    console.error("Multer error:", err);
+    return res
+      .status(400)
+      .json({ message: `File upload error: ${err.message}` });
+  } else if (err) {
+    console.error("File upload error:", err);
+    return res
+      .status(400)
+      .json({ message: `File upload error: ${err.message}` });
+  }
+  next();
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, "Uploads"));
@@ -283,20 +307,18 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // Reduced to 5MB to match frontend
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
       "image/png",
+      "image/gif", // Added GIF to match frontend
       "application/pdf",
-      "text/plain",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type"), false);
+      cb(new Error("Invalid file type. Allowed: JPEG, PNG, GIF, PDF"), false);
     }
   },
 });
@@ -383,8 +405,19 @@ app.get("/conversations", userController.getConversations);
 app.post("/conversations", userController.createConversation);
 app.get("/messages", userController.getMessages);
 
-app.post("/upload-file", upload.single("file"), userController.uploadFile);
-app.post("/messages/upload", upload.single("file"), userController.uploadFile);
+// Apply Multer error handling to file upload routes
+app.post(
+  "/upload-file",
+  upload.single("file"),
+  handleMulterError,
+  userController.uploadFile
+);
+app.post(
+  "/messages/upload",
+  upload.single("file"),
+  handleMulterError,
+  userController.uploadFile
+);
 
 const authenticate = async (req, res, next) => {
   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
