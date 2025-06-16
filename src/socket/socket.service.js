@@ -417,11 +417,7 @@ export const initializeSocket = (server) => {
     cors: {
       origin: (origin, callback) => {
         console.log(`Socket.IO CORS origin check: ${origin}`);
-        if (
-          !origin ||
-          allowedOrigins.includes(origin) ||
-          origin.startsWith("http://localhost")
-        ) {
+        if (!origin || allowedOrigins.includes(origin)) {
           callback(null, origin || "https://kiotachat-frontend.vercel.app");
         } else {
           console.error(`Socket.IO CORS rejected: ${origin}`);
@@ -432,11 +428,8 @@ export const initializeSocket = (server) => {
       credentials: true,
       allowedHeaders: ["Content-Type", "Authorization", "Cookie", "x-user-id"],
     },
-    transports: ["websocket", "polling"],
-    allowEIO3: true,
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionAttempts: 10,
+    transports: ["websocket", "polling"], // Fallback for Safari
+    allowEIO3: true, // Support older Socket.IO clients
   });
 
   io.on("connection", (socket) => {
@@ -453,6 +446,7 @@ export const initializeSocket = (server) => {
         return;
       }
       console.log(`Registering user with userId ${userId}, role ${role}`);
+      // Clear any existing userId for this socket
       for (const [existingUserId, socketId] of userSocketMap.entries()) {
         if (socketId === socket.id) {
           userSocketMap.delete(existingUserId);
@@ -490,6 +484,7 @@ export const initializeSocket = (server) => {
             throw new Error("Invalid sender or recipient ID");
           }
 
+          // Validate sender and recipient exist
           const sender = await prisma.user.findUnique({
             where: { id: fromId },
           });
@@ -691,6 +686,7 @@ export const initializeSocket = (server) => {
             throw new Error("Conversation not found");
           }
 
+          // Fetch sender details
           const sender = await prisma.user.findUnique({
             where: { id: fromId },
             select: { id: true, fullName: true, email: true, role: true },

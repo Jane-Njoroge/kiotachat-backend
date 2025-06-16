@@ -616,13 +616,6 @@ import { generateOtp } from "../utils/generateOtp.js";
 import userService from "./user.service.js";
 import { getIo, userSocketMap } from "../socket/socket.service.js";
 import prisma from "../prisma.js";
-import rateLimit from "express-rate-limit";
-
-const otpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
-  message: "Too many OTP requests, please try again later.",
-});
 
 const userController = {
   async register(req, res) {
@@ -630,14 +623,6 @@ const userController = {
       const { fullName, email, phoneNumber, password } = req.body;
       if (!fullName || !email || !phoneNumber || !password) {
         return res.status(400).json({ message: "All fields are required" });
-      }
-      if (!/^\S+@\S+\.\S+$/.test(email)) {
-        return res.status(400).json({ message: "Invalid email format" });
-      }
-      if (password.length < 8) {
-        return res
-          .status(400)
-          .json({ message: "Password must be at least 8 characters" });
       }
       const result = await userService.registerUser({
         fullName,
@@ -704,6 +689,7 @@ const userController = {
       console.log("Found user:", { userId: user.id, role: user.role });
       const result = await userService.verifyUserOtp(email, otp);
 
+      // Clear existing cookies before setting new ones
       res.clearCookie("userId", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -720,18 +706,18 @@ const userController = {
       res.cookie("userId", result.userId.toString(), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "lax", // Changed to Lax for Safari compatibility
         path: "/",
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
       });
       res.cookie("userRole", result.role, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        sameSite: "lax", // Changed to Lax for Safari compatibility
         path: "/",
         maxAge: 24 * 60 * 60 * 1000,
       });
-      res.setHeader("x-user-id", result.userId.toString());
+      res.setHeader("x-user-id", result.userId.toString()); // Fallback for Safari
       console.log("Cookies set:", {
         userId: result.userId,
         userRole: result.role,
@@ -910,6 +896,7 @@ const userController = {
             io.to(senderSocketId).emit("private message", message);
           }
 
+          // Emit conversation updated event
           const updatedConversation = await prisma.conversation.findUnique({
             where: { id: parseInt(message.conversationId, 10) },
             include: {
@@ -1237,8 +1224,5 @@ const userController = {
     }
   },
 };
-
-// Apply rate limiter to generateOtp
-userController.generateOtp = otpLimiter(userController.generateOtp);
 
 export default userController;
