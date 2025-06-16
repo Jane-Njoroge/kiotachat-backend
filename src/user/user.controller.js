@@ -689,7 +689,7 @@ const userController = {
       console.log("Found user:", { userId: user.id, role: user.role });
       const result = await userService.verifyUserOtp(email, otp);
 
-      // Clear existing cookies before setting new ones
+      // Clear existing cookies
       res.clearCookie("userId", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -706,18 +706,17 @@ const userController = {
       res.cookie("userId", result.userId.toString(), {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax", // Changed to Lax for Safari compatibility
+        sameSite: "lax",
         path: "/",
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        maxAge: 24 * 60 * 60 * 1000,
       });
       res.cookie("userRole", result.role, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax", // Changed to Lax for Safari compatibility
+        sameSite: "lax",
         path: "/",
         maxAge: 24 * 60 * 60 * 1000,
       });
-      res.setHeader("x-user-id", result.userId.toString()); // Fallback for Safari
       console.log("Cookies set:", {
         userId: result.userId,
         userRole: result.role,
@@ -742,12 +741,17 @@ const userController = {
 
   async uploadFile(req, res) {
     try {
-      const userId = parseInt(
-        req.cookies.userId || req.headers["x-user-id"],
-        10
-      );
+      let userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
       if (!userId || isNaN(userId)) {
-        return res.status(401).json({ message: "Authentication required" });
+        // Fallback: Try to get userId from session or token if available
+        const { email } = req.body;
+        if (email) {
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (user) userId = user.id;
+        }
+        if (!userId || isNaN(userId)) {
+          return res.status(401).json({ message: "Authentication required" });
+        }
       }
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
@@ -896,7 +900,6 @@ const userController = {
             io.to(senderSocketId).emit("private message", message);
           }
 
-          // Emit conversation updated event
           const updatedConversation = await prisma.conversation.findUnique({
             where: { id: parseInt(message.conversationId, 10) },
             include: {

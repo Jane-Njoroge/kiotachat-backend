@@ -9,6 +9,7 @@ import prisma from "./src/prisma.js";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 dotenv.config();
 
@@ -28,10 +29,20 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+      console.log(`CORS origin check: ${origin}, Headers:`, {
+        origin,
+        "x-user-id": origin ? "" : "not provided",
+        cookie: origin ? "" : "not provided",
+      });
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.startsWith("http://localhost")
+      ) {
+        callback(null, origin || "https://kiotachat-frontend.vercel.app");
       } else {
-        callback(new Error("Not allowed by CORS"));
+        console.error(`CORS rejected: ${origin}`);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -46,13 +57,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Serve static files from the uploads directory
-app.use("/uploads", express.static(path.join(__dirname, "Uploads")));
+// Ensure Uploads directory exists
+const uploadsDir = path.join(__dirname, "Uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.chmodSync(uploadsDir, 0o755);
+}
 
-// Configure multer for file uploads
+app.use("/Uploads", express.static(uploadsDir));
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "Uploads"));
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -62,7 +78,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
@@ -83,7 +99,9 @@ const upload = multer({
 app.use((req, res, next) => {
   console.log(
     `Incoming request: ${req.method} ${req.url}, Origin: ${req.headers.origin}, Cookies:`,
-    req.cookies
+    req.cookies,
+    `Headers:`,
+    { "x-user-id": req.headers["x-user-id"] || "none" }
   );
   next();
 });
@@ -96,13 +114,13 @@ app.post("/clear-cookies", (req, res) => {
   res.clearCookie("userId", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "none",
+    sameSite: "lax",
     path: "/",
   });
   res.clearCookie("userRole", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "none",
+    sameSite: "lax",
     path: "/",
   });
   res.json({ message: "Cookies cleared" });
@@ -113,6 +131,8 @@ app.get("/me", async (req, res) => {
     cookies: req.cookies,
     headers: req.headers,
     origin: req.headers.origin,
+    userIdCookie: req.cookies.userId,
+    xUserIdHeader: req.headers["x-user-id"],
   });
 
   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
@@ -120,6 +140,7 @@ app.get("/me", async (req, res) => {
     console.log("/me: Invalid or missing userId", {
       userId,
       cookies: req.cookies,
+      headers: req.headers,
     });
     return res.status(401).json({ message: "Authentication required" });
   }
@@ -161,10 +182,9 @@ app.get("/me", async (req, res) => {
 app.get("/conversations", userController.getConversations);
 app.post("/conversations", userController.createConversation);
 app.get("/messages", userController.getMessages);
-
-// File upload route
 app.post("/upload-file", upload.single("file"), userController.uploadFile);
 app.post("/messages/upload", upload.single("file"), userController.uploadFile);
+
 const authenticate = async (req, res, next) => {
   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
   if (!userId || isNaN(userId)) {
@@ -192,16 +212,6 @@ app.get("/search/conversations", userController.searchConversations);
 app.get("/search/users", userController.searchUsers);
 app.post("/conversations/:id/read", userController.markConversationAsRead);
 
-app.use((req, res, next) => {
-  console.log(
-    `Request: ${req.method} ${req.url}, Origin: ${req.headers.origin}, Headers:`,
-    req.headers,
-    `Cookies:`,
-    req.cookies
-  );
-  next();
-});
-
 app.use((req, res) => {
   console.log(`Route not found: ${req.method} ${req.url}`);
   res.status(404).json({ message: "Route not found" });
@@ -210,7 +220,6 @@ app.use((req, res) => {
 const port = process.env.PORT || 5002;
 server.listen(port, async () => {
   console.log(`Server running on port ${port}`);
-
   try {
     await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_user_email ON "User" (email);`;
     console.log("Index created on User.email");
