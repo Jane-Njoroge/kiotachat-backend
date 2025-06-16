@@ -24,16 +24,13 @@ const allowedOrigins = [
   process.env.FRONTEND_URL || "https://kiotapay.co.ke",
   "https://kiotachat-frontend.vercel.app",
   "http://localhost:3000",
+  "http://localhost:3001",
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      console.log(`CORS origin check: ${origin}, Headers:`, {
-        origin,
-        "x-user-id": origin ? "" : "not provided",
-        cookie: origin ? "" : "not provided",
-      });
+      console.log(`CORS origin check: ${origin}`);
       if (
         !origin ||
         allowedOrigins.includes(origin) ||
@@ -60,8 +57,8 @@ app.use(cookieParser());
 // Ensure Uploads directory exists
 const uploadsDir = path.join(__dirname, "Uploads");
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.chmodSync(uploadsDir, 0o755);
+  fs.mkdirSync(UploadsDir, { recursive: true });
+  fs.chmodSync(UploadsDir, 0o755);
 }
 
 app.use("/Uploads", express.static(uploadsDir));
@@ -78,7 +75,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // Align with frontend (5MB)
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
@@ -113,13 +110,13 @@ app.post("/verify-otp", userController.verifyOtp);
 app.post("/clear-cookies", (req, res) => {
   res.clearCookie("userId", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" ? true : false,
     sameSite: "lax",
     path: "/",
   });
   res.clearCookie("userRole", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" ? true : false,
     sameSite: "lax",
     path: "/",
   });
