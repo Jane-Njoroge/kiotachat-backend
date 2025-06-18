@@ -9,7 +9,7 @@ import prisma from "./src/prisma.js";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs"; // Added for directory creation
+import fs from "fs";
 
 dotenv.config();
 
