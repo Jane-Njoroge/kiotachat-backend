@@ -650,6 +650,31 @@ const userController = {
       });
     }
   },
+  async testEmailApi(req, res) {
+    try {
+      const response = await axios.post(
+        "https://fms-backend-staging.kiotapay.co.ke/api/v1/emails/send",
+        {
+          to: "test@example.com",
+          subject: "Test Email",
+          text: "This is a test email.",
+        },
+        {
+          headers: {
+            Authorization: "Bearer ${process.env.EMAIL_API_TOKEN}",
+            "Content-Type": "application/json",
+          },
+          timeout: 60000,
+        }
+      );
+      response.json({ message: "API email sent", response: response.data });
+    } catch (error) {
+      res.status(500).json({
+        message: "API email failed",
+        error: error.response?.data || error.message,
+      });
+    }
+  },
 };
 
 export default userController;
