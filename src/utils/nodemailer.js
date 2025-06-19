@@ -25,7 +25,7 @@ export const sendOtp = async (email, otp, retries = 1) => {
             Authorization: `Bearer ${process.env.EMAIL_API_TOKEN}`,
             "Content-Type": "application/json",
           },
-          timeout: 5000, // 5s timeout
+          timeout: 60000,
         }
       );
 
