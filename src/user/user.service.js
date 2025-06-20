@@ -20,13 +20,23 @@ const userService = {
     if (existingUser)
       throw new Error("This email’s already taken. Please login.");
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    console.time("bcryptHash");
+    const hashedPassword = await bcrypt.hash(password, 8);
+    console.timeEnd("bcryptHash");
+
     const user = await userRepository.createUser({
       fullName,
       email,
       phoneNumber,
       password: hashedPassword,
     });
+    // const hashedPassword = await bcrypt.hash(password, 10);
+    // const user = await userRepository.createUser({
+    //   fullName,
+    //   email,
+    //   phoneNumber,
+    //   password: hashedPassword,
+    // });
 
     return { message: "Account created successfully!", userId: user.id };
   },

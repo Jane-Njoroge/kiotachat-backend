@@ -23,18 +23,42 @@ const userController = {
     }
   },
 
+  // async login(req, res) {
+  //   try {
+  //     const { email, password } = req.body;
+  //     if (!email || !password) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Email and password are required" });
+  //     }
+  //     const result = await userService.loginUser(email, password);
+  //     res.json(result);
+  //   } catch (error) {
+  //     console.error("Login error:", error);
+  //     res.status(400).json({ message: error.message || "Login failed" });
+  //   }
+  // },
+
   async login(req, res) {
+    console.time("login");
     try {
       const { email, password } = req.body;
+      console.log("Login attempt:", { email });
       if (!email || !password) {
         return res
           .status(400)
           .json({ message: "Email and password are required" });
       }
       const result = await userService.loginUser(email, password);
+      console.timeEnd("login");
       res.json(result);
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Login error:", {
+        message: error.message,
+        stack: error.stack,
+        email: req.body.email,
+      });
+      console.timeEnd("login");
       res.status(400).json({ message: error.message || "Login failed" });
     }
   },

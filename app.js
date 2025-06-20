@@ -246,6 +246,7 @@ server.listen(port, async () => {
 
   try {
     await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_user_email ON "User" (email);`;
+    await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_otp_userid ON "OTP" (userId);`;
     console.log("Index created on User.email");
   } catch (error) {
     console.error("Failed to create index:", error);
