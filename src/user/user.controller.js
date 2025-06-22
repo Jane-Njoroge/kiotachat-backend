@@ -151,6 +151,93 @@ const userController = {
     }
   },
 
+  // async uploadFile(req, res) {
+  //   try {
+  //     console.log("Upload file request:", {
+  //       body: req.body,
+  //       cookies: req.cookies,
+  //       headers: req.headers,
+  //       file: req.file,
+  //     });
+
+  //     const userId = parseInt(
+  //       req.cookies.userId || req.headers["x-user-id"],
+  //       10
+  //     );
+  //     if (!userId || isNaN(userId)) {
+  //       console.log("Invalid userId:", { userId });
+  //       return res.status(401).json({ message: "Authentication required" });
+  //     }
+
+  //     const user = await prisma.user.findUnique({ where: { id: userId } });
+  //     if (!user) {
+  //       console.log("User not found:", { userId });
+  //       return res.status(401).json({ message: "User not found" });
+  //     }
+
+  //     if (!req.file) {
+  //       console.log("No file provided in request");
+  //       return res.status(400).json({ message: "No file uploaded" });
+  //     }
+
+  //     const { to, conversationId } = req.body;
+  //     const toId = parseInt(to, 10);
+  //     const convId = conversationId ? parseInt(conversationId, 10) : undefined;
+
+  //     if (!toId || isNaN(toId)) {
+  //       console.log("Invalid recipient ID:", { to });
+  //       return res.status(400).json({ message: "Recipient ID is required" });
+  //     }
+
+  //     const recipient = await prisma.user.findUnique({ where: { id: toId } });
+  //     if (!recipient) {
+  //       console.log("Recipient not found:", { toId });
+  //       return res.status(400).json({ message: "Recipient not found" });
+  //     }
+
+  //     const fileUrl = `/Uploads/${req.file.filename}`;
+  //     const fileType = req.file.mimetype;
+  //     const fileSize = req.file.size;
+  //     const fileName = req.file.originalname;
+
+  //     console.log("Sending file message:", {
+  //       userId,
+  //       toId,
+  //       conversationId: convId,
+  //       fileUrl,
+  //       fileType,
+  //       fileSize,
+  //       fileName,
+  //     });
+
+  //     const message = await userService.sendFileMessage({
+  //       userId,
+  //       toId,
+  //       conversationId: convId,
+  //       fileUrl,
+  //       fileType,
+  //       fileSize,
+  //       fileName,
+  //     });
+
+  //     console.log("File message created:", message);
+
+  //     res.status(201).json({
+  //       message: "File uploaded successfully",
+  //       data: message,
+  //     });
+  //   } catch (error) {
+  //     console.error("File upload error:", {
+  //       message: error.message,
+  //       stack: error.stack,
+  //       body: req.body,
+  //       cookies: req.cookies,
+  //     });
+  //     res
+  //       .status(500)
+  //       .json({ message: error.message || "Failed to upload file" });
+  //   }
+  // },
   async uploadFile(req, res) {
     try {
       console.log("Upload file request:", {
@@ -210,17 +297,48 @@ const userController = {
         fileName,
       });
 
-      const message = await userService.sendFileMessage({
-        userId,
-        toId,
-        conversationId: convId,
-        fileUrl,
-        fileType,
-        fileSize,
-        fileName,
+      // Check for existing message with the same fileUrl and conversationId
+      const existingMessage = await prisma.message.findFirst({
+        where: {
+          conversationId: convId,
+          fileUrl,
+          isDeleted: false,
+        },
       });
 
-      console.log("File message created:", message);
+      let message;
+      if (existingMessage) {
+        // Update existing message instead of creating a new one
+        message = await prisma.message.update({
+          where: { id: existingMessage.id },
+          data: {
+            content: "File message",
+            senderId: userId,
+            fileUrl,
+            fileType,
+            fileSize,
+            fileName,
+            updatedAt: new Date(),
+            isEdited: true,
+          },
+        });
+        console.log("Updated existing message:", message);
+      } else {
+        // Create new message if no duplicate exists
+        message = await userService.sendFileMessage({
+          userId,
+          toId,
+          conversationId: convId,
+          fileUrl,
+          fileType,
+          fileSize,
+          fileName,
+        });
+        console.log("File message created:", message);
+      }
+
+      const io = getIo();
+      io.to(String(convId)).emit("private message", message); // Emit to conversation room
 
       res.status(201).json({
         message: "File uploaded successfully",
