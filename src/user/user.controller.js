@@ -282,7 +282,18 @@ const userController = {
         return res.status(400).json({ message: "Recipient not found" });
       }
 
-      const fileUrl = `/Uploads/${req.file.filename}`;
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const fileKey = `uploads/${uniqueSuffix}-${req.file.originalname}`;
+      const uploadParams = {
+        Bucket: process.env.AWS_S3_BUCKET_NAME,
+        Key: fileKey,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+        ACL: "public-read", // Make file publicly accessible
+      };
+
+      await s3Client.send(new PutObjectCommand(uploadParams));
+      const fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
       const fileType = req.file.mimetype;
       const fileSize = req.file.size;
       const fileName = req.file.originalname;
@@ -295,6 +306,7 @@ const userController = {
         fileType,
         fileSize,
         fileName,
+        tempId,
       });
 
       // Check for existing message with the same fileUrl and conversationId
@@ -333,8 +345,9 @@ const userController = {
           fileType,
           fileSize,
           fileName,
+          tempId,
         });
-        console.log("File message created:", message);
+        // console.log("File message created:", message);
       }
 
       const io = getIo();

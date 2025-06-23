@@ -199,6 +199,7 @@ const userService = {
     fileType,
     fileSize,
     fileName,
+    tempId,
   }) {
     const fromId = parseInt(userId, 10);
     const recipientId = parseInt(toId, 10);
@@ -275,6 +276,7 @@ const userService = {
       fileType: message.fileType,
       fileSize: message.fileSize,
       fileName: message.fileName,
+      tempId,
     };
 
     const recipientSocketId = userSocketMap.get(recipientId);
