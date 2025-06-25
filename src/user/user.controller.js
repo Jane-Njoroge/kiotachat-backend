@@ -289,11 +289,13 @@ const userController = {
         Key: fileKey,
         Body: req.file.buffer,
         ContentType: req.file.mimetype,
-        ACL: "public-read", // Make file publicly accessible
+        ACL: "public-read",
       };
 
       await s3Client.send(new PutObjectCommand(uploadParams));
-      const fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+      const fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${
+        process.env.AWS_REGION || "us-east-1"
+      }.amazonaws.com/${fileKey}`;
       const fileType = req.file.mimetype;
       const fileSize = req.file.size;
       const fileName = req.file.originalname;
@@ -306,52 +308,20 @@ const userController = {
         fileType,
         fileSize,
         fileName,
-        tempId,
       });
 
-      // Check for existing message with the same fileUrl and conversationId
-      const existingMessage = await prisma.message.findFirst({
-        where: {
-          conversationId: convId,
-          fileUrl,
-          isDeleted: false,
-        },
+      const message = await userService.sendFileMessage({
+        userId,
+        toId,
+        conversationId: convId,
+        fileUrl,
+        fileType,
+        fileSize,
+        fileName,
       });
-
-      let message;
-      if (existingMessage) {
-        // Update existing message instead of creating a new one
-        message = await prisma.message.update({
-          where: { id: existingMessage.id },
-          data: {
-            content: "File message",
-            senderId: userId,
-            fileUrl,
-            fileType,
-            fileSize,
-            fileName,
-            updatedAt: new Date(),
-            isEdited: true,
-          },
-        });
-        console.log("Updated existing message:", message);
-      } else {
-        // Create new message if no duplicate exists
-        message = await userService.sendFileMessage({
-          userId,
-          toId,
-          conversationId: convId,
-          fileUrl,
-          fileType,
-          fileSize,
-          fileName,
-          tempId,
-        });
-        // console.log("File message created:", message);
-      }
 
       const io = getIo();
-      io.to(String(convId)).emit("private message", message); // Emit to conversation room
+      io.to(String(convId)).emit("private message", message);
 
       res.status(201).json({
         message: "File uploaded successfully",
