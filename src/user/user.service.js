@@ -779,19 +779,41 @@ const userService = {
     };
   },
 
-  async getAdmins(excludeUserId) {
-    const parsedExcludeUserId = parseInt(excludeUserId, 10);
-    if (isNaN(parsedExcludeUserId)) {
-      throw new Error("Valid excludeUserId is required");
+  async getAllUsers(role, excludeUserId) {
+    try {
+      const parsedExcludeUserId = parseInt(excludeUserId, 10);
+      if (isNaN(parsedExcludeUserId)) {
+        throw new Error("Valid excludeUserId is required");
+      }
+      return await userRepository.getAllUsers(role).then((users) =>
+        users
+          .filter(
+            (user) => user.id !== parsedExcludeUserId && user.role !== "ADMIN"
+          )
+          .map((user) => ({
+            ...user,
+            id: String(user.id),
+          }))
+      );
+    } catch (error) {
+      console.error("Error in getAllUsers:", error);
+      throw new Error(error.message || "Failed to fetch users");
     }
-    const admins = await userRepository.getAllUsers("ADMIN");
-    return admins
-      .filter((user) => user.id !== parsedExcludeUserId)
-      .map((user) => ({
-        ...user,
-        id: String(user.id),
-      }));
   },
+
+  // async getAdmins(excludeUserId) {
+  //   const parsedExcludeUserId = parseInt(excludeUserId, 10);
+  //   if (isNaN(parsedExcludeUserId)) {
+  //     throw new Error("Valid excludeUserId is required");
+  //   }
+  //   const admins = await userRepository.getAllUsers("ADMIN");
+  //   return admins
+  //     .filter((user) => user.id !== parsedExcludeUserId)
+  //     .map((user) => ({
+  //       ...user,
+  //       id: String(user.id),
+  //     }));
+  // },
 
   async createConversation(participant1Id, participant2Id) {
     const parsedParticipant1Id = parseInt(participant1Id, 10);

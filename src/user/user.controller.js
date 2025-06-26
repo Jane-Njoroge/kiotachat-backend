@@ -1058,10 +1058,26 @@ const userController = {
     }
   },
 
+  // async getUsers(req, res) {
+  //   try {
+  //     const { role } = req.query;
+  //     const users = await userService.getAllUsers(role);
+  //     res.json(users);
+  //   } catch (error) {
+  //     console.error("Get users error:", error);
+  //     res
+  //       .status(500)
+  //       .json({ message: error.message || "Failed to fetch users" });
+  //   }
+  // },
   async getUsers(req, res) {
     try {
       const { role } = req.query;
-      const users = await userService.getAllUsers(role);
+      const userId = req.userId; // From authenticate middleware
+      if (!userId || isNaN(parseInt(userId, 10))) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const users = await userService.getAllUsers(role, userId); // Pass userId to exclude
       res.json(users);
     } catch (error) {
       console.error("Get users error:", error);
@@ -1070,24 +1086,23 @@ const userController = {
         .json({ message: error.message || "Failed to fetch users" });
     }
   },
-
-  async getAdmins(req, res) {
-    try {
-      const { excludeUserId } = req.query;
-      if (!excludeUserId || isNaN(parseInt(excludeUserId, 10))) {
-        return res
-          .status(400)
-          .json({ message: "Valid excludeUserId is required" });
-      }
-      const admins = await userService.getAdmins(excludeUserId);
-      res.json(admins);
-    } catch (error) {
-      console.error("Get admins error:", error);
-      res
-        .status(500)
-        .json({ message: error.message || "Failed to fetch admins" });
-    }
-  },
+  // async getAdmins(req, res) {
+  //   try {
+  //     const { excludeUserId } = req.query;
+  //     if (!excludeUserId || isNaN(parseInt(excludeUserId, 10))) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Valid excludeUserId is required" });
+  //     }
+  //     const admins = await userService.getAdmins(excludeUserId);
+  //     res.json(admins);
+  //   } catch (error) {
+  //     console.error("Get admins error:", error);
+  //     res
+  //       .status(500)
+  //       .json({ message: error.message || "Failed to fetch admins" });
+  //   }
+  // },
 
   async createConversation(req, res) {
     try {
