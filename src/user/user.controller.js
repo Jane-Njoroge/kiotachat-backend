@@ -809,7 +809,7 @@ import userService from "./user.service.js";
 import { getIo, userSocketMap } from "../socket/socket.service.js";
 import prisma from "../prisma.js";
 import axios from "axios";
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 const s3Client = new S3Client({
   credentials: {
     accessKeyId: process.env.ACCESS_ID,
