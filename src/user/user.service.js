@@ -435,7 +435,6 @@ const userService = {
 
     return formattedMessage;
   },
-
   async forwardMessage(messageId, senderId, recipientIds, content) {
     const parsedMessageId = parseInt(messageId, 10);
     const parsedSenderId = parseInt(senderId, 10);
@@ -453,8 +452,8 @@ const userService = {
     const sender = await prisma.user.findUnique({
       where: { id: parsedSenderId },
     });
-    if (!sender || sender.role !== "ADMIN") {
-      throw new Error("Only admins can forward messages");
+    if (!sender) {
+      throw new Error("Sender not found");
     }
 
     const originalMessage = await prisma.message.findUnique({
@@ -471,11 +470,15 @@ const userService = {
 
     const forwardedMessages = [];
     for (const recipientId of recipientIds.map((id) => parseInt(id, 10))) {
+      if (recipientId === parsedSenderId) {
+        continue; // Skip forwarding to self
+      }
+
       const recipient = await prisma.user.findUnique({
         where: { id: recipientId },
       });
-      if (!recipient || recipient.role !== "ADMIN") {
-        continue; // Skip non-admin recipients
+      if (!recipient) {
+        continue; // Skip invalid recipients
       }
 
       const existingConversation = await prisma.conversation.findFirst({
@@ -506,14 +509,24 @@ const userService = {
         });
       }
 
+      const messageData = {
+        content: `Forwarded: ${content}`,
+        senderId: parsedSenderId,
+        conversationId,
+        originalMessageId: parsedMessageId,
+        isForwarded: true,
+      };
+
+      if (originalMessage.fileUrl) {
+        messageData.messageType = originalMessage.messageType;
+        messageData.fileUrl = originalMessage.fileUrl;
+        messageData.fileType = originalMessage.fileType;
+        messageData.fileSize = originalMessage.fileSize;
+        messageData.fileName = originalMessage.fileName;
+      }
+
       const forwardedMessage = await prisma.message.create({
-        data: {
-          content: `Forwarded: ${content}`,
-          senderId: parsedSenderId,
-          conversationId,
-          originalMessageId: parsedMessageId,
-          isForwarded: true,
-        },
+        data: messageData,
         include: {
           sender: {
             select: { id: true, fullName: true, email: true, role: true },
@@ -533,6 +546,11 @@ const userService = {
         isEdited: forwardedMessage.isEdited,
         isDeleted: forwardedMessage.isDeleted,
         isForwarded: forwardedMessage.isForwarded,
+        messageType: forwardedMessage.messageType,
+        fileUrl: forwardedMessage.fileUrl,
+        fileType: forwardedMessage.fileType,
+        fileSize: forwardedMessage.fileSize,
+        fileName: forwardedMessage.fileName,
       });
     }
 
