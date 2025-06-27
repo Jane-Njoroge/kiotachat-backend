@@ -436,8 +436,8 @@ const authenticate = async (req, res, next) => {
 
 app.put("/messages/:messageId", authenticate, userController.updateMessage);
 app.delete("/messages/:messageId", authenticate, userController.deleteMessage);
-app.get("/admins", userController.getAdmins);
-app.get("/users/admins", userController.getAdmins);
+// app.get("/admins", userController.getAdmins);
+// app.get("/users/admins", userController.getAdmins);
 app.post("/messages/forward", authenticate, userController.forwardMessage);
 app.get("/users", userController.getUsers);
 app.get("/search/conversations", userController.searchConversations);
