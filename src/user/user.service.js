@@ -4,6 +4,7 @@
 // import { sendOtp } from "../utils/nodemailer.js";
 // import userRepository from "./user.repository.js";
 // import prisma from "../prisma.js";
+
 // const userService = {
 //   async registerUser({ fullName, email, phoneNumber, password }) {
 //     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -30,13 +31,6 @@
 //       phoneNumber,
 //       password: hashedPassword,
 //     });
-//     // const hashedPassword = await bcrypt.hash(password, 10);
-//     // const user = await userRepository.createUser({
-//     //   fullName,
-//     //   email,
-//     //   phoneNumber,
-//     //   password: hashedPassword,
-//     // });
 
 //     return { message: "Account created successfully!", userId: user.id };
 //   },
@@ -435,6 +429,7 @@
 
 //     return formattedMessage;
 //   },
+
 //   async forwardMessage(messageId, senderId, recipientIds, content) {
 //     const parsedMessageId = parseInt(messageId, 10);
 //     const parsedSenderId = parseInt(senderId, 10);
@@ -677,6 +672,164 @@
 //     }
 //   },
 
+//   async broadcastMessage(userId, content) {
+//     const parsedUserId = parseInt(userId, 10);
+//     if (isNaN(parsedUserId) || !content.trim()) {
+//       throw new Error("Valid userId and content are required");
+//     }
+
+//     const sender = await prisma.user.findUnique({
+//       where: { id: parsedUserId },
+//       select: { id: true, fullName: true, email: true, role: true },
+//     });
+//     if (!sender) {
+//       throw new Error("Sender not found");
+//     }
+//     if (sender.role !== "ADMIN") {
+//       throw new Error("Only admins can send broadcast messages");
+//     }
+
+//     const users = await prisma.user.findMany({
+//       where: { id: { not: parsedUserId } },
+//       select: { id: true },
+//     });
+
+//     const broadcastMessages = [];
+//     const io = getIo();
+
+//     for (const user of users) {
+//       const recipientId = user.id;
+
+//       let conversation = await prisma.conversation.findFirst({
+//         where: {
+//           OR: [
+//             { participant1Id: parsedUserId, participant2Id: recipientId },
+//             { participant1Id: recipientId, participant2Id: parsedUserId },
+//           ],
+//         },
+//         include: { participant1: true, participant2: true },
+//       });
+
+//       if (!conversation) {
+//         conversation = await prisma.conversation.create({
+//           data: {
+//             participant1Id: parsedUserId,
+//             participant2Id: recipientId,
+//             unread: 1,
+//           },
+//           include: { participant1: true, participant2: true },
+//         });
+//       } else {
+//         await prisma.conversation.update({
+//           where: { id: conversation.id },
+//           data: { unread: { increment: 1 } },
+//         });
+//       }
+
+//       const message = await prisma.message.create({
+//         data: {
+//           content,
+//           senderId: parsedUserId,
+//           conversationId: conversation.id,
+//           messageType: "text",
+//         },
+//         include: {
+//           sender: {
+//             select: { id: true, fullName: true, email: true, role: true },
+//           },
+//         },
+//       });
+
+//       const formattedMessage = {
+//         id: String(message.id),
+//         content: message.content,
+//         sender: {
+//           ...message.sender,
+//           id: String(message.sender.id),
+//         },
+//         createdAt: message.createdAt.toISOString(),
+//         conversationId: String(conversation.id),
+//         isEdited: message.isEdited,
+//         isDeleted: message.isDeleted,
+//         messageType: message.messageType,
+//         fileUrl: message.fileUrl,
+//         fileType: message.fileType,
+//         fileSize: message.fileSize,
+//         fileName: message.fileName,
+//       };
+
+//       const recipientSocketId = userSocketMap.get(recipientId);
+//       const senderSocketId = userSocketMap.get(parsedUserId);
+
+//       if (recipientSocketId) {
+//         io.to(recipientSocketId).emit("private message", formattedMessage);
+//       }
+
+//       const updatedConversation = await prisma.conversation.findUnique({
+//         where: { id: conversation.id },
+//         include: {
+//           participant1: {
+//             select: { id: true, fullName: true, email: true, role: true },
+//           },
+//           participant2: {
+//             select: { id: true, fullName: true, email: true, role: true },
+//           },
+//           messages: {
+//             where: { isDeleted: false },
+//             include: {
+//               sender: {
+//                 select: { id: true, fullName: true, email: true, role: true },
+//               },
+//             },
+//             orderBy: { createdAt: "desc" },
+//           },
+//         },
+//       });
+
+//       const normalizedConversation = {
+//         ...updatedConversation,
+//         id: String(updatedConversation.id),
+//         participant1: {
+//           ...updatedConversation.participant1,
+//           id: String(updatedConversation.participant1.id),
+//         },
+//         participant2: {
+//           ...updatedConversation.participant2,
+//           id: String(updatedConversation.participant2.id),
+//         },
+//         messages: updatedConversation.messages.map((msg) => ({
+//           ...msg,
+//           id: String(msg.id),
+//           sender: { ...msg.sender, id: String(msg.sender.id) },
+//           isEdited: msg.isEdited,
+//           isDeleted: msg.isDeleted,
+//           messageType: msg.messageType,
+//           fileUrl: msg.fileUrl,
+//           fileType: msg.fileType,
+//           fileSize: msg.fileSize,
+//           fileName: msg.fileName,
+//         })),
+//       };
+
+//       if (recipientSocketId) {
+//         io.to(recipientSocketId).emit(
+//           "conversation updated",
+//           normalizedConversation
+//         );
+//       }
+//       if (senderSocketId) {
+//         io.to(senderSocketId).emit(
+//           "conversation updated",
+//           normalizedConversation
+//         );
+//       }
+
+//       broadcastMessages.push(formattedMessage);
+//     }
+
+//     return broadcastMessages;
+//   },
+
 //   async searchConversations(query, userId, role) {
 //     return await userRepository.searchConversations(query, userId, role);
 //   },
@@ -893,12 +1046,26 @@ const userService = {
     fileName,
     tempId,
   }) {
+    console.log("sendFileMessage called:", {
+      userId,
+      toId,
+      conversationId,
+      fileUrl,
+      fileType,
+      fileSize,
+      fileName,
+      tempId,
+    });
+
     const fromId = parseInt(userId, 10);
     const recipientId = parseInt(toId, 10);
     const convId = conversationId ? parseInt(conversationId, 10) : undefined;
 
     if (isNaN(fromId) || isNaN(recipientId)) {
       throw new Error("Invalid sender or recipient ID");
+    }
+    if (!fileUrl) {
+      throw new Error("File URL is required");
     }
 
     const sender = await prisma.user.findUnique({

@@ -141,6 +141,7 @@
 //       res.status(400).json({ message: error.message || "Invalid OTP" });
 //     }
 //   },
+
 //   async uploadFile(req, res) {
 //     try {
 //       console.log("Upload file request:", {
@@ -627,7 +628,7 @@
 //     } catch (error) {
 //       console.error("Search users error:", error);
 //       res
-//         .state(500)
+//         .status(500)
 //         .json({ message: error.message || "Failed to search users" });
 //     }
 //   },
@@ -690,6 +691,45 @@
 //     }
 //   },
 
+//   async broadcastMessage(req, res) {
+//     try {
+//       const { content } = req.body;
+//       const userId = req.userId;
+//       console.log("POST /messages/broadcast received:", {
+//         content,
+//         userId,
+//         body: req.body,
+//         headers: req.headers,
+//         cookies: req.cookies,
+//       });
+
+//       if (!userId || isNaN(parseInt(userId, 10))) {
+//         console.log("Missing or invalid userId:", { userId });
+//         return res.status(401).json({ message: "Authentication required" });
+//       }
+//       if (!content || !content.trim()) {
+//         console.log("Validation failed:", { content, userId });
+//         return res
+//           .status(400)
+//           .json({ message: "Content is required for broadcast" });
+//       }
+
+//       const broadcastMessages = await userService.broadcastMessage(
+//         userId,
+//         content
+//       );
+//       res.status(200).json({
+//         message: "Broadcast sent successfully",
+//         broadcastMessages,
+//       });
+//     } catch (error) {
+//       console.error("Broadcast message error:", error);
+//       res
+//         .status(400)
+//         .json({ message: error.message || "Failed to send broadcast" });
+//     }
+//   },
+
 //   async testEmailApi(req, res) {
 //     try {
 //       const response = await axios.post(
@@ -707,7 +747,7 @@
 //           timeout: 60000,
 //         }
 //       );
-//       response.json({ message: "API email sent", response: response.data });
+//       res.json({ message: "API email sent", response: response.data });
 //     } catch (error) {
 //       res.status(500).json({
 //         message: "API email failed",
@@ -730,6 +770,7 @@ const s3Client = new S3Client({
     accessKeyId: process.env.ACCESS_ID,
     secretAccessKey: process.env.AWS_SECRET_KEY,
   },
+  // Region removed as per your colleague's advice
 });
 
 const userController = {
@@ -869,7 +910,13 @@ const userController = {
         body: req.body,
         cookies: req.cookies,
         headers: req.headers,
-        file: req.file,
+        file: req.file
+          ? {
+              originalname: req.file.originalname,
+              mimetype: req.file.mimetype,
+              size: req.file.size,
+            }
+          : null,
       });
 
       const userId = parseInt(
@@ -917,7 +964,34 @@ const userController = {
         ACL: "public-read",
       };
 
-      await s3Client.send(new PutObjectCommand(uploadParams));
+      // Retry logic for S3 upload
+      let uploadAttempts = 0;
+      const maxAttempts = 3;
+      let lastError = null;
+
+      while (uploadAttempts < maxAttempts) {
+        try {
+          await s3Client.send(new PutObjectCommand(uploadParams));
+          break; // Exit loop on success
+        } catch (error) {
+          uploadAttempts++;
+          lastError = error;
+          console.error(`S3 upload attempt ${uploadAttempts} failed:`, {
+            message: error.message,
+            stack: error.stack,
+          });
+          if (uploadAttempts === maxAttempts) {
+            throw new Error(
+              `Failed to upload to S3 after ${maxAttempts} attempts: ${error.message}`
+            );
+          }
+          // Wait before retrying
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * uploadAttempts)
+          );
+        }
+      }
+
       const fileUrl = `https://${uploadParams.Bucket}.s3.amazonaws.com/${fileKey}`;
       const fileType = req.file.mimetype;
       const fileSize = req.file.size;
@@ -1462,7 +1536,7 @@ const userController = {
         },
         {
           headers: {
-            Authorization: "Bearer ${process.env.EMAIL_API_TOKEN}",
+            Authorization: `Bearer ${process.env.EMAIL_API_TOKEN}`,
             "Content-Type": "application/json",
           },
           timeout: 60000,

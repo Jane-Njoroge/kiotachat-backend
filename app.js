@@ -108,6 +108,30 @@
 //   next();
 // });
 
+// const authenticate = async (req, res, next) => {
+//   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
+//   if (!userId || isNaN(userId)) {
+//     return res.status(401).json({ message: "Authentication required" });
+//   }
+//   const user = await prisma.user.findUnique({
+//     where: { id: userId },
+//     select: { id: true, role: true },
+//   });
+//   if (!user) {
+//     return res.status(401).json({ message: "User not found" });
+//   }
+//   req.userId = userId;
+//   req.userRole = user.role.toUpperCase();
+//   next();
+// };
+
+// const restrictToAdmin = (req, res, next) => {
+//   if (req.userRole !== "ADMIN") {
+//     return res.status(403).json({ message: "Admin access required" });
+//   }
+//   next();
+// };
+
 // app.post("/register", userController.register);
 // app.post("/login", userController.login);
 // app.post("/generate-otp", userController.generateOtp);
@@ -181,8 +205,6 @@
 // app.get("/conversations", userController.getConversations);
 // app.post("/conversations", userController.createConversation);
 // app.get("/messages", userController.getMessages);
-
-// // Apply Multer error handling to file upload routes
 // app.post(
 //   "/upload-file",
 //   upload.single("file"),
@@ -195,24 +217,6 @@
 //   handleMulterError,
 //   userController.uploadFile
 // );
-
-// const authenticate = async (req, res, next) => {
-//   const userId = parseInt(req.cookies.userId || req.headers["x-user-id"], 10);
-//   if (!userId || isNaN(userId)) {
-//     return res.status(401).json({ message: "Authentication required" });
-//   }
-//   const user = await prisma.user.findUnique({
-//     where: { id: userId },
-//     select: { id: true, role: true },
-//   });
-//   if (!user) {
-//     return res.status(401).json({ message: "User not found" });
-//   }
-//   req.userId = userId;
-//   req.userRole = user.role.toUpperCase();
-//   next();
-// };
-
 // app.put("/messages/:messageId", authenticate, userController.updateMessage);
 // app.delete("/messages/:messageId", authenticate, userController.deleteMessage);
 // app.get("/admins", userController.getAdmins);
@@ -222,6 +226,12 @@
 // app.get("/search/conversations", userController.searchConversations);
 // app.get("/search/users", userController.searchUsers);
 // app.post("/conversations/:id/read", userController.markConversationAsRead);
+// app.post(
+//   "/messages/broadcast",
+//   authenticate,
+//   restrictToAdmin,
+//   userController.broadcastMessage
+// );
 
 // app.use((req, res, next) => {
 //   console.log(
@@ -260,20 +270,8 @@ import cookieParser from "cookie-parser";
 import http from "http";
 import prisma from "./src/prisma.js";
 import multer from "multer";
-import path from "path";
-import { fileURLToPath } from "url";
-import fs from "fs";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const uploadDir = path.join(__dirname, "Uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log("Created Uploads directory:", uploadDir);
-}
 
 const app = express();
 const server = http.createServer(app);
@@ -308,8 +306,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-app.use("/Uploads", express.static(path.join(__dirname, "Uploads")));
-
 const handleMulterError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     console.error("Multer error:", err);
@@ -325,24 +321,14 @@ const handleMulterError = (err, req, res, next) => {
   next();
 };
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "Uploads"));
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + "-" + file.originalname);
-  },
-});
-
 const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Reduced to 5MB to match frontend
+  storage: multer.memoryStorage(), // Use memory storage for S3 uploads
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       "image/jpeg",
       "image/png",
-      "image/gif", // Added GIF to match frontend
+      "image/gif",
       "application/pdf",
     ];
     if (allowedTypes.includes(file.mimetype)) {
@@ -358,6 +344,13 @@ app.use((req, res, next) => {
     `Incoming request: ${req.method} ${req.url}, Origin: ${req.headers.origin}, Cookies:`,
     req.cookies
   );
+  // Set timeout for file upload requests
+  if (
+    req.url.includes("/upload-file") ||
+    req.url.includes("/messages/upload")
+  ) {
+    req.setTimeout(30000); // 30 seconds timeout
+  }
   next();
 });
 
@@ -460,12 +453,14 @@ app.post("/conversations", userController.createConversation);
 app.get("/messages", userController.getMessages);
 app.post(
   "/upload-file",
+  authenticate,
   upload.single("file"),
   handleMulterError,
   userController.uploadFile
 );
 app.post(
   "/messages/upload",
+  authenticate,
   upload.single("file"),
   handleMulterError,
   userController.uploadFile
