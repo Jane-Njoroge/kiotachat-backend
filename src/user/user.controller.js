@@ -903,7 +903,6 @@ const userController = {
       res.status(400).json({ message: error.message || "Invalid OTP" });
     }
   },
-
   async uploadFile(req, res) {
     try {
       console.log("Upload file request:", {
@@ -964,30 +963,45 @@ const userController = {
         ACL: "public-read",
       };
 
-      // Retry logic for S3 upload
+      const s3Client = new S3Client({
+        credentials: {
+          accessKeyId: process.env.ACCESS_ID,
+          secretAccessKey: process.env.AWS_SECRET_KEY,
+        },
+      });
+
+      // Retry logic with enhanced logging and longer delay
       let uploadAttempts = 0;
       const maxAttempts = 3;
       let lastError = null;
 
       while (uploadAttempts < maxAttempts) {
         try {
-          await s3Client.send(new PutObjectCommand(uploadParams));
+          console.log(`S3 upload attempt ${uploadAttempts + 1} for ${fileKey}`);
+          const command = new PutObjectCommand(uploadParams);
+          await s3Client.send(command);
+          console.log(`S3 upload successful for ${fileKey}`);
           break; // Exit loop on success
         } catch (error) {
           uploadAttempts++;
           lastError = error;
-          console.error(`S3 upload attempt ${uploadAttempts} failed:`, {
-            message: error.message,
-            stack: error.stack,
-          });
+          console.error(
+            `S3 upload attempt ${uploadAttempts} failed for ${fileKey}:`,
+            {
+              message: error.message,
+              code: error.code,
+              stack: error.stack,
+              requestId: error.$metadata?.requestId,
+            }
+          );
           if (uploadAttempts === maxAttempts) {
             throw new Error(
               `Failed to upload to S3 after ${maxAttempts} attempts: ${error.message}`
             );
           }
-          // Wait before retrying
+          // Increased delay between retries
           await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * uploadAttempts)
+            setTimeout(resolve, 2000 * uploadAttempts)
           );
         }
       }
@@ -1036,6 +1050,285 @@ const userController = {
         .json({ message: error.message || "Failed to upload file" });
     }
   },
+  async uploadFile(req, res) {
+    try {
+      console.log("Upload file request:", {
+        body: req.body,
+        cookies: req.cookies,
+        headers: req.headers,
+        file: req.file
+          ? {
+              originalname: req.file.originalname,
+              mimetype: req.file.mimetype,
+              size: req.file.size,
+            }
+          : null,
+      });
+
+      const userId = parseInt(
+        req.cookies.userId || req.headers["x-user-id"],
+        10
+      );
+      if (!userId || isNaN(userId)) {
+        console.log("Invalid userId:", { userId });
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        console.log("User not found:", { userId });
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      if (!req.file) {
+        console.log("No file provided in request");
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const { to, conversationId } = req.body;
+      const toId = parseInt(to, 10);
+      const convId = conversationId ? parseInt(conversationId, 10) : undefined;
+
+      if (!toId || isNaN(toId)) {
+        console.log("Invalid recipient ID:", { to });
+        return res.status(400).json({ message: "Recipient ID is required" });
+      }
+
+      const recipient = await prisma.user.findUnique({ where: { id: toId } });
+      if (!recipient) {
+        console.log("Recipient not found:", { toId });
+        return res.status(400).json({ message: "Recipient not found" });
+      }
+
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const fileKey = `uploads/${uniqueSuffix}-${req.file.originalname}`;
+      const uploadParams = {
+        Bucket: process.env.AWS_S3_BUCKET_NAME || process.env.BUCKET_NAME,
+        Key: fileKey,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+        ACL: "public-read",
+      };
+
+      const s3Client = new S3Client({
+        credentials: {
+          accessKeyId: process.env.ACCESS_ID,
+          secretAccessKey: process.env.AWS_SECRET_KEY,
+        },
+        region: "eu-west-3", // Matching the working code's region
+      });
+
+      // Retry logic with enhanced logging
+      let uploadAttempts = 0;
+      const maxAttempts = 3;
+      let lastError = null;
+
+      while (uploadAttempts < maxAttempts) {
+        try {
+          console.log(`S3 upload attempt ${uploadAttempts + 1} for ${fileKey}`);
+          const command = new PutObjectCommand(uploadParams);
+          await s3Client.send(command);
+          console.log(`S3 upload successful for ${fileKey}`);
+          break; // Exit loop on success
+        } catch (error) {
+          uploadAttempts++;
+          lastError = error;
+          console.error(
+            `S3 upload attempt ${uploadAttempts} failed for ${fileKey}:`,
+            {
+              message: error.message,
+              code: error.code,
+              stack: error.stack,
+              requestId: error.$metadata?.requestId,
+            }
+          );
+          if (uploadAttempts === maxAttempts) {
+            throw new Error(
+              `Failed to upload to S3 after ${maxAttempts} attempts: ${error.message}`
+            );
+          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, 2000 * uploadAttempts)
+          );
+        }
+      }
+
+      const fileUrl = `https://${uploadParams.Bucket}.s3.eu-west-3.amazonaws.com/${fileKey}`;
+      const fileType = req.file.mimetype;
+      const fileSize = req.file.size;
+      const fileName = req.file.originalname;
+
+      console.log("Sending file message:", {
+        userId,
+        toId,
+        conversationId: convId,
+        fileUrl,
+        fileType,
+        fileSize,
+        fileName,
+      });
+
+      const message = await userService.sendFileMessage({
+        userId,
+        toId,
+        conversationId: convId,
+        fileUrl,
+        fileType,
+        fileSize,
+        fileName,
+      });
+
+      const io = getIo();
+      io.to(String(convId)).emit("private message", message);
+
+      res.status(201).json({
+        message: "File uploaded successfully",
+        data: message,
+      });
+    } catch (error) {
+      console.error("File upload error:", {
+        message: error.message,
+        stack: error.stack,
+        body: req.body,
+        cookies: req.cookies,
+      });
+      res
+        .status(500)
+        .json({ message: error.message || "Failed to upload file" });
+    }
+  },
+  // async uploadFile(req, res) {
+  //   try {
+  //     console.log("Upload file request:", {
+  //       body: req.body,
+  //       cookies: req.cookies,
+  //       headers: req.headers,
+  //       file: req.file
+  //         ? {
+  //             originalname: req.file.originalname,
+  //             mimetype: req.file.mimetype,
+  //             size: req.file.size,
+  //           }
+  //         : null,
+  //     });
+
+  //     const userId = parseInt(
+  //       req.cookies.userId || req.headers["x-user-id"],
+  //       10
+  //     );
+  //     if (!userId || isNaN(userId)) {
+  //       console.log("Invalid userId:", { userId });
+  //       return res.status(401).json({ message: "Authentication required" });
+  //     }
+
+  //     const user = await prisma.user.findUnique({ where: { id: userId } });
+  //     if (!user) {
+  //       console.log("User not found:", { userId });
+  //       return res.status(401).json({ message: "User not found" });
+  //     }
+
+  //     if (!req.file) {
+  //       console.log("No file provided in request");
+  //       return res.status(400).json({ message: "No file uploaded" });
+  //     }
+
+  //     const { to, conversationId } = req.body;
+  //     const toId = parseInt(to, 10);
+  //     const convId = conversationId ? parseInt(conversationId, 10) : undefined;
+
+  //     if (!toId || isNaN(toId)) {
+  //       console.log("Invalid recipient ID:", { to });
+  //       return res.status(400).json({ message: "Recipient ID is required" });
+  //     }
+
+  //     const recipient = await prisma.user.findUnique({ where: { id: toId } });
+  //     if (!recipient) {
+  //       console.log("Recipient not found:", { toId });
+  //       return res.status(400).json({ message: "Recipient not found" });
+  //     }
+
+  //     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+  //     const fileKey = `uploads/${uniqueSuffix}-${req.file.originalname}`;
+  //     const uploadParams = {
+  //       Bucket: process.env.AWS_S3_BUCKET_NAME || process.env.BUCKET_NAME,
+  //       Key: fileKey,
+  //       Body: req.file.buffer,
+  //       ContentType: req.file.mimetype,
+  //       ACL: "public-read",
+  //     };
+
+  //     // Retry logic for S3 upload
+  //     let uploadAttempts = 0;
+  //     const maxAttempts = 3;
+  //     let lastError = null;
+
+  //     while (uploadAttempts < maxAttempts) {
+  //       try {
+  //         await s3Client.send(new PutObjectCommand(uploadParams));
+  //         break; // Exit loop on success
+  //       } catch (error) {
+  //         uploadAttempts++;
+  //         lastError = error;
+  //         console.error(`S3 upload attempt ${uploadAttempts} failed:`, {
+  //           message: error.message,
+  //           stack: error.stack,
+  //         });
+  //         if (uploadAttempts === maxAttempts) {
+  //           throw new Error(
+  //             `Failed to upload to S3 after ${maxAttempts} attempts: ${error.message}`
+  //           );
+  //         }
+  //         // Wait before retrying
+  //         await new Promise((resolve) =>
+  //           setTimeout(resolve, 1000 * uploadAttempts)
+  //         );
+  //       }
+  //     }
+
+  //     const fileUrl = `https://${uploadParams.Bucket}.s3.amazonaws.com/${fileKey}`;
+  //     const fileType = req.file.mimetype;
+  //     const fileSize = req.file.size;
+  //     const fileName = req.file.originalname;
+
+  //     console.log("Sending file message:", {
+  //       userId,
+  //       toId,
+  //       conversationId: convId,
+  //       fileUrl,
+  //       fileType,
+  //       fileSize,
+  //       fileName,
+  //     });
+
+  //     const message = await userService.sendFileMessage({
+  //       userId,
+  //       toId,
+  //       conversationId: convId,
+  //       fileUrl,
+  //       fileType,
+  //       fileSize,
+  //       fileName,
+  //     });
+
+  //     const io = getIo();
+  //     io.to(String(convId)).emit("private message", message);
+
+  //     res.status(201).json({
+  //       message: "File uploaded successfully",
+  //       data: message,
+  //     });
+  //   } catch (error) {
+  //     console.error("File upload error:", {
+  //       message: error.message,
+  //       stack: error.stack,
+  //       body: req.body,
+  //       cookies: req.cookies,
+  //     });
+  //     res
+  //       .status(500)
+  //       .json({ message: error.message || "Failed to upload file" });
+  //   }
+  // },
 
   async getUsers(req, res) {
     try {
